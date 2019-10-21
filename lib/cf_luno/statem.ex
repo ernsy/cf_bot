@@ -31,7 +31,7 @@ defmodule CfLuno.Statem do
       "Check oracle price state: #{inspect state}
       old_price:  #{inspect old_oracle_price}
       curr_price: #{inspect current_oracle_price}
-      date:       #{inspect :erlang.date}"
+      date:       #{inspect {:erlang.date, :erlang.time}}"
     )
     new_data = %{data | oracle_price: current_oracle_price}
     opt = case state do
