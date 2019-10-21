@@ -1,11 +1,18 @@
 defmodule CfLuno.Statem do
-  @moduledoc false
   require Logger
 
-  use GenStateMachine, callback_mode: :state_functions
+  use GenStateMachine
 
   @delta_time 60000
-  @thresh_perc 0.01
+  @unstable_perc 0.01
+  @stable_perc 0.001
+  @timeout_action {:timeout, @delta_time, :check_oracle_price}
+  @limit_sell_order_action {:next_event, :internal, :limit_sell_order}
+  @market_sell_order_action {:next_event, :internal, :market_sell_order}
+
+  def start_link(init_data) do
+    GenStateMachine.start_link(CfLuno.Statem, init_data)
+  end
 
   # Callbacks
 
@@ -15,24 +22,45 @@ defmodule CfLuno.Statem do
       :oracle_price => oracle_price,
       :mode => :sell
     }
-    {:ok, :wait_stable, new_data, {:timeout, @delta_time, :check_oracle_price}}
+    {:ok, :wait_stable, new_data, @timeout_action}
   end
 
-  def wait_stable(:timeout, :check_oracle_price, %{oracle_price: old_oracle_price, mode: :sell} = data) do
+  def handle_event(:timeout, :check_oracle_price, state, %{oracle_price: old_oracle_price} = data) do
     current_oracle_price = get_oracle_price()
+    Logger.debug(
+      "Check oracle price state: #{inspect state}
+      old_price:  #{inspect old_oracle_price}
+      curr_price: #{inspect current_oracle_price}
+      date:       #{inspect :erlang.date}"
+    )
     new_data = %{data | oracle_price: current_oracle_price}
-    case (current_oracle_price - old_oracle_price) / old_oracle_price < -@thresh_perc do
-      change_perc when change_perc < -@thresh_perc ->
-        {:next_state, :market_sell, new_data, {:next_event, :place_market_sell_order, []}}
-      change_perc when change_perc > @thresh_perc ->
-        {:next_state, :wait_stable, new_data, {:timeout, @delta_time, :check_oracle_price}}
-      _ -> {:next_state, :limit_sell, new_data, {:next_event, :place_limit_sell_order, []}}
+    opt = case state do
+      :wait_stable ->
+        [
+          stable: {:sell_order, @limit_sell_order_action},
+          down_trend: {:sell_order, @market_sell_order_action},
+          up_trend: {:wait_stable, @timeout_action},
+        ]
+      :sell_order ->
+        [
+          stable: {:sell_order, @limit_sell_order_action},
+          down_trend: {:sell_order, @market_sell_order_action},
+          up_trend: {:wait_stable, @timeout_action}
+        ]
     end
+    check_delta(old_oracle_price, current_oracle_price, new_data, opt)
   end
 
-  def limit_sell(:place_limit_sell_order, _, data) do
-    Logger.debug("Limit Sell Order")
-    {:keep_state, data, {:timeout, @delta_time, :check_oracle_price}}
+  def handle_event(:internal, :limit_sell_order, :sell_order, data) do
+    ask_price = get_luno_price("ask")
+    Logger.debug("Limit sell order at #{inspect ask_price}")
+    {:keep_state, data, @timeout_action}
+  end
+
+  def handle_event(:internal, :market_sell_order, :sell_order, data) do
+    bid_price = get_luno_price("bid")
+    Logger.warn("Limit market order at #{inspect bid_price}")
+    {:keep_state, data, @timeout_action}
   end
 
   # helpers
@@ -40,7 +68,36 @@ defmodule CfLuno.Statem do
   defp get_oracle_price() do
     {:ok, resp} = CfLuno.Api.get_cb_ticker("BTC-USD")
     price = resp["price"]
-    String.to_float(price)
+    {float, _rem_bin} = Float.parse(price)
+    float
+  end
+
+  defp get_luno_price(type) do
+    {:ok, resp} = CfLuno.Api.get_ticker("XBTZAR")
+    price = resp[type]
+    {float, _rem_bin} = Float.parse(price)
+    float
+  end
+
+  defp check_delta(
+         old_price,
+         curr_price,
+         new_data,
+         [
+           stable: {s_state, s_action},
+           down_trend: {dt_state, dt_action},
+           up_trend: {ut_state, ut_action}
+         ]
+       ) do
+    case (curr_price - old_price) / old_price  do
+      change_perc when abs(change_perc) < @stable_perc ->
+        {:next_state, s_state, new_data, s_action}
+      change_perc when change_perc < -@unstable_perc ->
+        {:next_state, dt_state, new_data, dt_action}
+      change_perc when change_perc > @unstable_perc ->
+        {:next_state, ut_state, new_data, ut_action}
+      _ -> {:keep_state, new_data, @timeout_action}
+    end
   end
 
 end
