@@ -18,6 +18,11 @@ defmodule CfLuno.Api do
     invoke_public_api_v1(path)
   end
 
+  def get_orderbook_top(pair) do
+    path = "/orderbook_top?pair=" <> pair
+    invoke_public_api_v1(path)
+  end
+
   def list_orders(pair, state) do
     path = "/listorders?pair=" <> pair <> "&state=" <> state
     invoke_private_api_v1(path)

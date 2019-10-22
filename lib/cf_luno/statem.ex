@@ -7,10 +7,13 @@ defmodule CfLuno.Statem do
   @dt_perc 0.01
   @ut_perc 0.005
   @stable_perc 0.001
+  @before_limit_vol 1.0
+
   @timeout_action {:timeout, @delta_time, :check_oracle_price}
   @limit_sell_order_action {:next_event, :internal, :limit_sell_order}
   @market_sell_order_action {:next_event, :internal, :market_sell_order}
   @cancel_order_action {:next_event, :internal, :cancel_order}
+
 
   def start_link(init_data) do
     GenStateMachine.start_link(__MODULE__, init_data, name: __MODULE__)
@@ -77,10 +80,9 @@ defmodule CfLuno.Statem do
   end
 
   def handle_event(:internal, :limit_sell_order, :sell_order, data) do
-    ask_price = get_luno_price("ask")
-    # get current orders
-    # cancel and place order if one doesn't exist at price, if volume below > x*btc_sell_amount
-    Logger.debug("Limit sell order at #{inspect ask_price}")
+    {:ok, resp} = CfLuno.Api.list_orders("XBTZAR", "PENDING")
+    orders = resp["orders"]
+    process_orders(orders)
     {:keep_state, data, @timeout_action}
   end
 
@@ -126,6 +128,57 @@ defmodule CfLuno.Statem do
         {:next_state, ut_state, new_data, ut_action}
       _ -> {:next_state, d_state, new_data, d_action}
     end
+  end
+
+  defp process_orders(nil) do
+    place_order(calc_limit_order_price())
+  end
+  defp process_orders(orders) when length(orders) > 1 do
+    Enum.each(
+      orders,
+      fn (order) ->
+        order_id = order["order_id"]
+        Logger.debug("Cancel order id #{inspect order_id} for #{inspect order["limit_price"]}")
+      end
+    )
+    place_order(calc_limit_order_price())
+  end
+  defp process_orders([order]) do
+    {curr_limit_price, _rem_bin} = Integer.parse(order["limit_price"])
+    {:ok, new_limit_price} = calc_limit_order_price()
+    order_id = order["order_id"]
+    place_order(curr_limit_price, new_limit_price, order_id)
+  end
+
+  def calc_limit_order_price() do
+    {:ok, book} = CfLuno.Api.get_orderbook_top("XBTZAR")
+    asks = book["asks"]
+    lowest_ask = hd(asks)["price"]
+    Enum.reduce_while(
+      asks,
+      {0, lowest_ask},
+      fn (ask, {prev_volume, prev_ask_price}) ->
+        {volume, _v_rem_bin} = Float.parse(ask["volume"])
+        total_volume = prev_volume + volume
+        {ask_price, _rem_bin} = Integer.parse(ask["price"])
+        if total_volume > @before_limit_vol do
+          {:halt, {:ok, prev_ask_price}}
+        else
+          {:cont, {total_volume, ask_price}}
+        end
+      end
+    )
+  end
+
+  defp place_order(new_limit_price) do
+    Logger.debug("Limit sell order at #{inspect new_limit_price}")
+  end
+  defp place_order(curr_limit_price, new_limit_price, _order_id) when curr_limit_price == new_limit_price do
+    Logger.debug("Keep Limit sell order at #{inspect curr_limit_price}")
+  end
+  defp place_order(curr_limit_price, new_limit_price, order_id) do
+    Logger.debug("Cancel limit sell order #{inspect order_id} at #{inspect curr_limit_price}")
+    Logger.debug("New limit sell order at #{inspect new_limit_price}")
   end
 
 end

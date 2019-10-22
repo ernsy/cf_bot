@@ -30,7 +30,7 @@ defmodule JsonUtils do
     {:error, {status_code, body}}
   end
   def decode_json_response(error) do
-    Logger.error(error)
+    Logger.error("#{inspect error}")
     error
   end
 
