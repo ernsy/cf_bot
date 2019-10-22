@@ -5,7 +5,7 @@ defmodule CfLuno.Statem do
 
   @delta_time 60000
   @dt_perc 0.01
-  @ut_perc 0.001
+  @ut_perc 0.005
   @stable_perc 0.001
   @timeout_action {:timeout, @delta_time, :check_oracle_price}
   @limit_sell_order_action {:next_event, :internal, :limit_sell_order}
