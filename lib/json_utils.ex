@@ -12,7 +12,7 @@ defmodule JsonUtils do
   def retry_req(req_fun, params, retry_count) do
     http_resp = req_fun.(params)
     case decode_json_response(http_resp) do
-      {:error, {429, _body}} ->
+      {:error, {429, _body}} or {:error, %HTTPoison.Error{id: nil, reason: :closed}} ->
         Process.sleep(round(60000 / @max_req_per_minute))
         retry_req(req_fun, params, retry_count - 1)
       response -> response

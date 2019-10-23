@@ -5,7 +5,7 @@ defmodule CfLuno.Statem do
 
   import String, only: [to_float: 1]
 
-  @delta_time 5000
+  @delta_time 60000
   @dt_perc 0.01
   @ut_perc 0.005
   @stable_perc 0.001
@@ -53,7 +53,12 @@ defmodule CfLuno.Statem do
     {:keep_state, %{data | btc_hodl: btc_amount}}
   end
 
-  def handle_event({:timeout, :check_oracle_price}, :check_oracle_price, state, %{oracle_price: old_oracle_price} = data) do
+  def handle_event(
+        {:timeout, :check_oracle_price},
+        :check_oracle_price,
+        state,
+        %{oracle_price: old_oracle_price} = data
+      ) do
     current_oracle_price = get_oracle_price()
     Logger.debug(
       "Check oracle price state: #{inspect state}
@@ -96,8 +101,8 @@ defmodule CfLuno.Statem do
 
   def handle_event(:internal, :market_sell_order, :sell_order, data) do
     bid_price = get_luno_price("bid")
-    Logger.warn("Limit market order at #{inspect bid_price}")
-    {:keep_state, data, @timeout_action}
+    Logger.warn("Market order at #{inspect bid_price}")
+    {:keep_state, data, @market_sell_order_action}
   end
 
   def terminate(_reason, _state, _data) do
@@ -180,7 +185,7 @@ defmodule CfLuno.Statem do
     Enum.reduce_while(
       asks,
       {0, lowest_ask, curr_limit_vol},
-      fn (ask, {prev_volume, prev_ask_price, curr_limit_vol}) ->
+      fn (ask, {prev_volume, curr_limit_vol}) ->
         ask_volume = to_float(ask["volume"])
         {ask_price, _rem_bin} = Integer.parse(ask["price"])
         {total_volume, rem_limit_vol} =
@@ -192,13 +197,16 @@ defmodule CfLuno.Statem do
             {total_volume, curr_limit_vol}
           end
         if total_volume > new_limit_vol do
-          {:halt, {:ok, prev_ask_price}}
+          new_limit_order_price = max(lowest_ask + 1, ask_price) - 1
+          {:halt, {:ok, new_limit_order_price}}
         else
-          {:cont, {total_volume, ask_price, rem_limit_vol}}
+          {:cont, {total_volume, rem_limit_vol}}
         end
       end
     )
   end
+
+  defp get_lowest_post_only_price
 
   defp place_order(new_limit_price, new_limit_vol) do
     Logger.debug("Limit sell order for #{inspect new_limit_vol} at #{inspect new_limit_price}")
