@@ -184,7 +184,7 @@ defmodule CfLuno.Statem do
     lowest_ask = hd(asks)["price"]
     Enum.reduce_while(
       asks,
-      {0, lowest_ask, curr_limit_vol},
+      {0, curr_limit_vol},
       fn (ask, {prev_volume, curr_limit_vol}) ->
         ask_volume = to_float(ask["volume"])
         {ask_price, _rem_bin} = Integer.parse(ask["price"])
@@ -205,8 +205,6 @@ defmodule CfLuno.Statem do
       end
     )
   end
-
-  defp get_lowest_post_only_price
 
   defp place_order(new_limit_price, new_limit_vol) do
     Logger.debug("Limit sell order for #{inspect new_limit_vol} at #{inspect new_limit_price}")
