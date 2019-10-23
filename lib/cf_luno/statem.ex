@@ -57,7 +57,10 @@ defmodule CfLuno.Statem do
         {:timeout, :check_oracle_price},
         :check_oracle_price,
         state,
-        %{oracle_price: old_oracle_price} = data
+        %{
+          oracle_price: old_oracle_price,
+          mode: :sell
+        } = data
       ) do
     current_oracle_price = get_oracle_price()
     Logger.debug(
@@ -102,7 +105,7 @@ defmodule CfLuno.Statem do
   def handle_event(:internal, :market_sell_order, :sell_order, data) do
     bid_price = get_luno_price("bid")
     Logger.warn("Market order at #{inspect bid_price}")
-    {:keep_state, data, @market_sell_order_action}
+    {:keep_state, data, @limit_sell_order_action}
   end
 
   def terminate(_reason, _state, _data) do
@@ -181,26 +184,27 @@ defmodule CfLuno.Statem do
   def calc_limit_order_price(new_limit_vol, curr_limit_price, curr_limit_vol) do
     {:ok, book} = CfLuno.Api.get_orderbook_top("XBTZAR")
     asks = book["asks"]
-    lowest_ask = hd(asks)["price"]
+    {lowest_ask, _} = hd(asks)["price"]
+                      |> Integer.parse()
     Enum.reduce_while(
       asks,
       {0, curr_limit_vol},
-      fn (ask, {prev_volume, curr_limit_vol}) ->
+      fn (ask, {acc_volume, curr_limit_vol}) ->
         ask_volume = to_float(ask["volume"])
         {ask_price, _rem_bin} = Integer.parse(ask["price"])
-        {total_volume, rem_limit_vol} =
+        {new_acc_volume, rem_limit_vol} =
           if curr_limit_vol > 0 and ask_price >= curr_limit_price do
-            total_volume = prev_volume + ask_volume - curr_limit_vol
-            {total_volume, 0}
+            new_acc_volume = acc_volume + ask_volume - curr_limit_vol
+            {new_acc_volume, 0}
           else
-            total_volume = prev_volume + ask_volume
-            {total_volume, curr_limit_vol}
+            new_acc_volume = acc_volume + ask_volume
+            {new_acc_volume, curr_limit_vol}
           end
-        if total_volume > new_limit_vol do
+        if new_acc_volume > new_limit_vol do
           new_limit_order_price = max(lowest_ask + 1, ask_price) - 1
           {:halt, {:ok, new_limit_order_price}}
         else
-          {:cont, {total_volume, rem_limit_vol}}
+          {:cont, {new_acc_volume, rem_limit_vol}}
         end
       end
     )
