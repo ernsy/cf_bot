@@ -28,6 +28,11 @@ defmodule CfLuno.Api do
     invoke_private_api_v1(path)
   end
 
+  def balance(assets) do
+    path = "/balance?assets=" <> assets
+    invoke_private_api_v1(path)
+  end
+
   #---------------------------------------------------------------------------------------------------------------------
   # private functions
   #---------------------------------------------------------------------------------------------------------------------
