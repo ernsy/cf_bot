@@ -15,7 +15,6 @@ defmodule CfLuno.Statem do
   @market_sell_order_action {:next_event, :internal, :market_sell_order}
   @cancel_order_action {:next_event, :internal, :cancel_order}
 
-
   #---------------------------------------------------------------------------------------------------------------------
   # api
   #---------------------------------------------------------------------------------------------------------------------
@@ -42,7 +41,6 @@ defmodule CfLuno.Statem do
     new_data = %{
       :btc_hodl => btc_amount,
       :oracle_price => oracle_price,
-      :mode => :sell
     }
     {:ok, :wait_stable, new_data, @timeout_action}
   end
@@ -59,7 +57,6 @@ defmodule CfLuno.Statem do
         state,
         %{
           oracle_price: old_oracle_price,
-          mode: :sell
         } = data
       ) do
     current_oracle_price = get_oracle_price()
@@ -73,17 +70,27 @@ defmodule CfLuno.Statem do
     opt = case state do
       :wait_stable ->
         [
-          stable: {:sell_order, @limit_sell_order_action},
-          down_trend: {:sell_order, @market_sell_order_action},
+          stable: {:sell, @limit_sell_order_action},
+          down_trend: {:quick_sell, @market_sell_order_action},
           up_trend: {:wait_stable, @timeout_action},
-          default: {:sell_order,  @limit_sell_order_action}
+          positive: {:wait_stable, @timeout_action},
+          negative: {:sell, @limit_sell_order_action}
         ]
-      :sell_order ->
+      :sell ->
         [
-          stable: {:sell_order, @limit_sell_order_action},
-          down_trend: {:sell_order, @market_sell_order_action},
+          stable: {:sell, @limit_sell_order_action},
+          down_trend: {:quick_sell, @market_sell_order_action},
           up_trend: {:wait_stable, @cancel_order_action},
-          default: {:sell_order, @limit_sell_order_action}
+          positive: {:sell, @limit_sell_order_action},
+          negative: {:sell, @limit_sell_order_action}
+        ]
+      :quick_sell ->
+        [
+          stable: {:sell, @limit_sell_order_action},
+          down_trend: {:quick_sell, @limit_sell_order_action},
+          up_trend: {:wait_stable, @cancel_order_action},
+          positive: {:sell, @limit_sell_order_action},
+          negative: {:sell, @limit_sell_order_action}
         ]
     end
     check_delta(old_oracle_price, current_oracle_price, new_data, opt)
@@ -94,15 +101,23 @@ defmodule CfLuno.Statem do
     {:keep_state, data, @timeout_action}
   end
 
-  def handle_event(:internal, :limit_sell_order, :sell_order, %{btc_hodl: btc_hodl} = data) do
+  def handle_event(:internal, :limit_sell_order, :sell, %{btc_hodl: btc_hodl}) do
     {:ok, resp} = CfLuno.Api.list_orders("XBTZAR", "PENDING")
     orders = resp["orders"]
     new_limit_vol = calc_limit_vol(btc_hodl)
-    process_orders(orders, new_limit_vol)
-    {:keep_state, data, @timeout_action}
+    process_orders(orders, new_limit_vol, new_limit_vol)
+    {:keep_state_and_data, @timeout_action}
   end
 
-  def handle_event(:internal, :market_sell_order, :sell_order, data) do
+  def handle_event(:internal, :limit_sell_order, :quick_sell, %{btc_hodl: btc_hodl}) do
+    {:ok, resp} = CfLuno.Api.list_orders("XBTZAR", "PENDING")
+    orders = resp["orders"]
+    new_limit_vol = calc_limit_vol(btc_hodl)
+    process_orders(orders, 0, new_limit_vol)
+    {:keep_state_and_data, @timeout_action}
+  end
+
+  def handle_event(:internal, :market_sell_order, :quick_sell, data) do
     bid_price = get_luno_price("bid")
     Logger.warn("Market order at #{inspect bid_price}")
     {:keep_state, data, @limit_sell_order_action}
@@ -138,17 +153,21 @@ defmodule CfLuno.Statem do
            stable: {s_state, s_action},
            down_trend: {dt_state, dt_action},
            up_trend: {ut_state, ut_action},
-           default: {d_state, d_action}
+           positive: {p_state, p_action},
+           negative: {n_state, n_action},
          ]
        ) do
     case (curr_price - old_price) / old_price  do
       change_perc when abs(change_perc) < @stable_perc ->
         {:next_state, s_state, new_data, s_action}
-      change_perc when change_perc < -@dt_perc ->
-        {:next_state, dt_state, new_data, dt_action}
       change_perc when change_perc > @ut_perc ->
         {:next_state, ut_state, new_data, ut_action}
-      _ -> {:next_state, d_state, new_data, d_action}
+      change_perc when change_perc < -@dt_perc ->
+        {:next_state, dt_state, new_data, dt_action}
+      change_perc when change_perc > 0 ->
+        {:next_state, p_state, new_data, p_action}
+      change_perc when change_perc < 0 ->
+        {:next_state, n_state, new_data, n_action}
     end
   end
 
@@ -156,13 +175,14 @@ defmodule CfLuno.Statem do
     {:ok, balances} = CfLuno.Api.balance("XBT")
     xbt_bal = hd(balances["balance"])
     to_float(xbt_bal["balance"]) + to_float(xbt_bal["unconfirmed"]) + to_float(xbt_bal["reserved"]) - btc_hodl
+    |> Float.round(6)
   end
 
-  defp process_orders(nil, new_limit_vol) do
-    {:ok, new_limit_price} = calc_limit_order_price(new_limit_vol, 0, 0)
+  defp process_orders(nil, before_limit_vol, new_limit_vol) do
+    {:ok, new_limit_price} = calc_limit_order_price(before_limit_vol, 0, 0)
     place_order(new_limit_price, new_limit_vol)
   end
-  defp process_orders(orders, new_limit_vol) when length(orders) > 1 do
+  defp process_orders(orders, before_limit_vol, new_limit_vol) when length(orders) > 1 do
     Enum.each(
       orders,
       fn (order) ->
@@ -170,18 +190,24 @@ defmodule CfLuno.Statem do
         Logger.debug("Cancel order id #{inspect order_id} for #{inspect order["limit_price"]}")
       end
     )
-    {:ok, new_limit_price} = calc_limit_order_price(new_limit_vol, 0, 0)
+    {:ok, new_limit_price} = calc_limit_order_price(before_limit_vol, 0, 0)
     place_order(new_limit_price, new_limit_vol)
   end
-  defp process_orders([order], new_limit_vol) do
+  defp process_orders([order], before_limit_vol, new_limit_vol) do
     {curr_limit_price, _} = Integer.parse(order["limit_price"])
-    curr_limit_vol = to_float(order["limit_volume"])
+    curr_limit_vol = order["limit_volume"]
+                     |> to_float()
+                     |> Float.round(6)
     order_id = order["order_id"]
-    {:ok, new_limit_price} = calc_limit_order_price(new_limit_vol, curr_limit_price, curr_limit_vol)
+    {:ok, new_limit_price} = calc_limit_order_price(before_limit_vol, curr_limit_price, curr_limit_vol)
     place_order(curr_limit_price, curr_limit_vol, order_id, new_limit_price, new_limit_vol)
   end
 
-  def calc_limit_order_price(new_limit_vol, curr_limit_price, curr_limit_vol) do
+  defp calc_limit_order_price(0, _curr_limit_price, _curr_limit_vol) do
+    ask = get_luno_price("ask")
+    calc_lowest_limit_order_price(ask, ask)
+  end
+  defp calc_limit_order_price(before_limit_vol, curr_limit_price, curr_limit_vol) do
     {:ok, book} = CfLuno.Api.get_orderbook_top("XBTZAR")
     asks = book["asks"]
     {lowest_ask, _} = hd(asks)["price"]
@@ -200,7 +226,7 @@ defmodule CfLuno.Statem do
             new_acc_volume = acc_volume + ask_volume
             {new_acc_volume, curr_limit_vol}
           end
-        if new_acc_volume > new_limit_vol do
+        if new_acc_volume > before_limit_vol do
           new_limit_order_price = calc_lowest_limit_order_price(lowest_ask, ask_price)
           {:halt, {:ok, new_limit_order_price}}
         else
@@ -212,25 +238,25 @@ defmodule CfLuno.Statem do
 
   defp calc_lowest_limit_order_price(lowest_ask, lowest_ask) do
     bid_price = get_luno_price("bid")
-    max(bid_price+1, lowest_ask - 1)
+    max(bid_price + 1, lowest_ask - 1)
   end
   defp calc_lowest_limit_order_price(lowest_ask, ask_price) do
-     max(lowest_ask + 1, ask_price) - 1
+    max(lowest_ask + 1, ask_price) - 1
   end
-
-
 
   defp place_order(new_limit_price, new_limit_vol) do
     Logger.debug("Limit sell order for #{inspect new_limit_vol} at #{inspect new_limit_price}")
   end
   defp place_order(curr_limit_price, curr_limit_vol, _order_id, new_limit_price, new_limit_vol)
-       when curr_limit_price == new_limit_price and new_limit_vol > curr_limit_vol do
-    Logger.debug("Keep Limit sell order at #{inspect curr_limit_price}")
-    Logger.debug("Limit sell order for #{inspect (new_limit_vol - curr_limit_vol)} at #{inspect new_limit_price}")
+       when curr_limit_price == new_limit_price do
+    Logger.debug("Keep Limit sell order for #{inspect curr_limit_vol} at #{inspect curr_limit_price}")
+    if new_limit_vol > curr_limit_vol do
+      Logger.debug("Limit sell order for #{inspect (new_limit_vol - curr_limit_vol)} at #{inspect new_limit_price}")
+    end
   end
   defp place_order(curr_limit_price, _curr_limit_vol, order_id, new_limit_price, new_limit_vol) do
     Logger.debug("Cancel limit sell order #{inspect order_id} at #{inspect curr_limit_price}")
-    Logger.debug("New limit sell order for #{inspect (new_limit_vol)} at #{inspect new_limit_price}")
+    Logger.debug("New limit sell order for #{inspect new_limit_vol} at #{inspect new_limit_price}")
   end
 
 end
