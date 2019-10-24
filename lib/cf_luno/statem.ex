@@ -76,7 +76,7 @@ defmodule CfLuno.Statem do
           stable: {:sell_order, @limit_sell_order_action},
           down_trend: {:sell_order, @market_sell_order_action},
           up_trend: {:wait_stable, @timeout_action},
-          default: {:wait_stable, @timeout_action}
+          default: {:sell_order,  @limit_sell_order_action}
         ]
       :sell_order ->
         [
@@ -201,7 +201,7 @@ defmodule CfLuno.Statem do
             {new_acc_volume, curr_limit_vol}
           end
         if new_acc_volume > new_limit_vol do
-          new_limit_order_price = max(lowest_ask + 1, ask_price) - 1
+          new_limit_order_price = calc_lowest_limit_order_price(lowest_ask, ask_price)
           {:halt, {:ok, new_limit_order_price}}
         else
           {:cont, {new_acc_volume, rem_limit_vol}}
@@ -209,6 +209,16 @@ defmodule CfLuno.Statem do
       end
     )
   end
+
+  defp calc_lowest_limit_order_price(lowest_ask, lowest_ask) do
+    bid_price = get_luno_price("bid")
+    max(bid_price+1, lowest_ask - 1)
+  end
+  defp calc_lowest_limit_order_price(lowest_ask, ask_price) do
+     max(lowest_ask + 1, ask_price) - 1
+  end
+
+
 
   defp place_order(new_limit_price, new_limit_vol) do
     Logger.debug("Limit sell order for #{inspect new_limit_vol} at #{inspect new_limit_price}")
