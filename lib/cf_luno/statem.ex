@@ -5,7 +5,7 @@ defmodule CfLuno.Statem do
 
   import String, only: [to_float: 1]
 
-  @delta_time 5000
+  @delta_time 60000
   @dt_perc 0.01
   @ut_perc 0.005
   @stable_perc 0.001
@@ -123,9 +123,8 @@ defmodule CfLuno.Statem do
     {:keep_state, data, @limit_sell_order_action}
   end
 
-  def handle_event(:info, {:ssl_closed, {:sslsocket, _}}, _state, _data) do
-    # Call the default implementation from GenStateMachine
-    {:keep_stae_and_data, []}
+  def handle_event(:info, {:ssl_closed, _}, _state, _data) do
+    {:keep_state_and_data, []}
   end
 
   def terminate(_reason, _state, _data) do
