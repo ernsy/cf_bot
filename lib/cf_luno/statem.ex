@@ -5,7 +5,7 @@ defmodule CfLuno.Statem do
 
   import String, only: [to_float: 1]
 
-  @delta_time 60000
+  @delta_time 5000
   @dt_perc 0.01
   @ut_perc 0.005
   @stable_perc 0.001
@@ -121,6 +121,11 @@ defmodule CfLuno.Statem do
     bid_price = get_luno_price("bid")
     Logger.warn("Market order at #{inspect bid_price}")
     {:keep_state, data, @limit_sell_order_action}
+  end
+
+  def handle_event(:info, {:ssl_closed, {:sslsocket, _}}, _state, _data) do
+    # Call the default implementation from GenStateMachine
+    {:keep_stae_and_data, []}
   end
 
   def terminate(_reason, _state, _data) do
