@@ -9,6 +9,7 @@ defmodule CfLuno.Statem do
   @dt_perc 0.01
   @ut_perc 0.005
   @stable_perc 0.001
+  @min_order_vol 0.0005
 
   @timeout_action {{:timeout, :check_oracle_price}, @delta_time, :check_oracle_price}
   @limit_sell_order_action {:next_event, :internal, :limit_sell_order}
@@ -47,7 +48,7 @@ defmodule CfLuno.Statem do
 
   def handle_event(:cast, {:set_btc_hodl, btc_amount}, state, data) do
     :ok = :dets.insert(:disk_storage, {:btc_hodl, btc_amount})
-    Logger.debug("Set btc to hodl:#{inspect btc_amount}, state:#{inspect state}")
+    Logger.info("Set btc to hodl:#{inspect btc_amount}, state:#{inspect state}")
     {:keep_state, %{data | btc_hodl: btc_amount}}
   end
 
@@ -60,7 +61,7 @@ defmodule CfLuno.Statem do
         } = data
       ) do
     current_oracle_price = get_oracle_price()
-    Logger.debug(
+    Logger.info(
       "Check oracle price state: #{inspect state}
       old_price:  #{inspect old_oracle_price}
       curr_price: #{inspect current_oracle_price}
@@ -102,18 +103,14 @@ defmodule CfLuno.Statem do
   end
 
   def handle_event(:internal, :limit_sell_order, :sell, %{btc_hodl: btc_hodl}) do
-    {:ok, resp} = CfLuno.Api.list_orders("XBTZAR", "PENDING")
-    orders = resp["orders"]
     new_limit_vol = calc_limit_vol(btc_hodl)
-    process_orders(orders, new_limit_vol, new_limit_vol)
+    check_vol_and_process_order(new_limit_vol, new_limit_vol)
     {:keep_state_and_data, @timeout_action}
   end
 
   def handle_event(:internal, :limit_sell_order, :quick_sell, %{btc_hodl: btc_hodl}) do
-    {:ok, resp} = CfLuno.Api.list_orders("XBTZAR", "PENDING")
-    orders = resp["orders"]
     new_limit_vol = calc_limit_vol(btc_hodl)
-    process_orders(orders, 0, new_limit_vol)
+    check_vol_and_process_order(0, new_limit_vol)
     {:keep_state_and_data, @timeout_action}
   end
 
@@ -176,10 +173,23 @@ defmodule CfLuno.Statem do
     end
   end
 
+  defp check_vol_and_process_order(before_limit_vol, new_limit_vol) when new_limit_vol >= @min_order_vol do
+    {:ok, resp} = CfLuno.Api.list_orders("XBTZAR", "PENDING")
+    resp["orders"]
+    |> process_orders(before_limit_vol, new_limit_vol)
+  end
+
+  defp check_vol_and_process_order(_before_limit_vol, _new_limit_vol) do
+    {:ok, "volume to sell below minimum order volume"}
+  end
+
   defp calc_limit_vol(btc_hodl) do
     {:ok, balances} = CfLuno.Api.balance("XBT")
     xbt_bal = hd(balances["balance"])
-    to_float(xbt_bal["balance"]) + to_float(xbt_bal["unconfirmed"]) + to_float(xbt_bal["reserved"]) - btc_hodl
+    avail_bal = to_float(xbt_bal["balance"])
+    unconf_bal = to_float(xbt_bal["unconfirmed"])
+    avail_bal + unconf_bal - btc_hodl
+    |> min(avail_bal)
     |> Float.round(6)
   end
 
@@ -192,7 +202,7 @@ defmodule CfLuno.Statem do
       orders,
       fn (order) ->
         order_id = order["order_id"]
-        Logger.debug("Cancel order id #{inspect order_id} for #{inspect order["limit_price"]}")
+        Logger.info("Cancel order id #{inspect order_id} for #{inspect order["limit_price"]}")
       end
     )
     {:ok, new_limit_price} = calc_limit_order_price(before_limit_vol, 0, 0)
@@ -250,18 +260,18 @@ defmodule CfLuno.Statem do
   end
 
   defp place_order(new_limit_price, new_limit_vol) do
-    Logger.debug("Limit sell order for #{inspect new_limit_vol} at #{inspect new_limit_price}")
+    Logger.info("Limit sell order for #{inspect new_limit_vol} at #{inspect new_limit_price}")
   end
   defp place_order(curr_limit_price, curr_limit_vol, _order_id, new_limit_price, new_limit_vol)
        when curr_limit_price == new_limit_price do
-    Logger.debug("Keep Limit sell order for #{inspect curr_limit_vol} at #{inspect curr_limit_price}")
+    Logger.info("Keep Limit sell order for #{inspect curr_limit_vol} at #{inspect curr_limit_price}")
     if new_limit_vol > curr_limit_vol do
-      Logger.debug("Limit sell order for #{inspect (new_limit_vol - curr_limit_vol)} at #{inspect new_limit_price}")
+      Logger.info("Limit sell order for #{inspect (new_limit_vol - curr_limit_vol)} at #{inspect new_limit_price}")
     end
   end
   defp place_order(curr_limit_price, _curr_limit_vol, order_id, new_limit_price, new_limit_vol) do
-    Logger.debug("Cancel limit sell order #{inspect order_id} at #{inspect curr_limit_price}")
-    Logger.debug("New limit sell order for #{inspect new_limit_vol} at #{inspect new_limit_price}")
+    Logger.info("Cancel limit sell order #{inspect order_id} at #{inspect curr_limit_price}")
+    Logger.info("New limit sell order for #{inspect new_limit_vol} at #{inspect new_limit_price}")
   end
 
 end
