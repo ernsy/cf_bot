@@ -5,9 +5,9 @@ defmodule CfLuno.Statem do
 
   import String, only: [to_float: 1]
 
-  @delta_time 60000
-  @dt_perc 0.01
-  @ut_perc 0.005
+  @delta_time 30000
+  @dt_perc 0.001
+  @ut_perc 0.0005
   @stable_perc 0.001
   @min_order_vol 0.0005
 
@@ -218,7 +218,7 @@ defmodule CfLuno.Statem do
 
   defp calc_limit_order_price(0, _curr_limit_price, _curr_limit_vol) do
     ask = get_luno_price("ask")
-    calc_lowest_limit_order_price(ask, ask)
+    {:ok, calc_lowest_limit_order_price(ask, ask)}
   end
   defp calc_limit_order_price(before_limit_vol, curr_limit_price, curr_limit_vol) do
     {:ok, book} = CfLuno.Api.get_orderbook_top("XBTZAR")
@@ -258,19 +258,26 @@ defmodule CfLuno.Statem do
   end
 
   defp place_order(new_limit_price, new_limit_vol) do
-    Logger.info("Limit sell order for #{inspect new_limit_vol} at #{inspect new_limit_price}")
+    CfLuno.Api.post_order("XBTZAR", "ASK", to_string(new_limit_vol), to_string(new_limit_price), "true")
+    Logger.info("Placed limit sell order for #{inspect new_limit_vol} at #{inspect new_limit_price}")
   end
-  defp place_order(curr_limit_price, curr_limit_vol, _order_id, new_limit_price, new_limit_vol)
+  defp place_order(curr_limit_price, curr_limit_vol, order_id, new_limit_price, new_limit_vol)
        when curr_limit_price == new_limit_price do
-    Logger.info("Keep Limit sell order for #{inspect curr_limit_vol} at #{inspect curr_limit_price}")
+    Logger.info(
+      "Keep Limit sell order #{inspect order_id} for #{inspect curr_limit_vol} at #{inspect curr_limit_price}"
+    )
     if new_limit_vol > curr_limit_vol do
-      Logger.info("Limit sell order for #{inspect (new_limit_vol - curr_limit_vol)} at #{inspect new_limit_price}")
+      CfLuno.Api.post_order("XBTZAR", "ASK", to_string(new_limit_vol), to_string(new_limit_price), "true")
+      Logger.info(
+        "Placed limit sell order for #{inspect (new_limit_vol - curr_limit_vol)} at #{inspect new_limit_price}"
+      )
     end
   end
   defp place_order(curr_limit_price, _curr_limit_vol, order_id, new_limit_price, new_limit_vol) do
     {:ok, %{"success" => true}} = CfLuno.Api.stop_order(order_id)
     Logger.info("Cancelled limit sell order #{inspect order_id} at #{inspect curr_limit_price}")
-    Logger.info("New limit sell order for #{inspect new_limit_vol} at #{inspect new_limit_price}")
+    CfLuno.Api.post_order("XBTZAR", "ASK", to_string(new_limit_vol), to_string(new_limit_price), "true")
+    Logger.info("Placed limit sell order for #{inspect new_limit_vol} at #{inspect new_limit_price}")
   end
 
 end
