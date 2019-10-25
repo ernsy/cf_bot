@@ -1,5 +1,6 @@
 defmodule CfLuno.Api do
   require Logger
+  require StrippedInRelease
 
   @luno_url_v1 "https://api.mybitx.com/api/1"
 
@@ -19,12 +20,12 @@ defmodule CfLuno.Api do
   end
 
   def get_orderbook_top(pair) do
-     "/orderbook_top?pair=" <> pair
+    "/orderbook_top?pair=" <> pair
     |> invoke_public_api_v1()
   end
 
   def list_orders(pair, state) do
-     "/listorders?pair=" <> pair <> "&state=" <> state
+    "/listorders?pair=" <> pair <> "&state=" <> state
     |> invoke_private_api_v1_get()
   end
 
@@ -33,8 +34,26 @@ defmodule CfLuno.Api do
     |> invoke_private_api_v1_get()
   end
 
+  StrippedInRelease.fun do
+    def post_order(pair, type, volume, price, post_only) do
+      "/postorder?pair=" <> pair <> "&type=" <> type <> "&volume=" <> volume <> "&price=" <> price <> "&post_only=" <> post_only
+      {:ok, %{"order_id" => "TestOrderID"}}
+    end
+
+    def stop_order(order_id) do
+      path = "/stoporder?order_id=" <> order_id
+      Logger.debug("private api v1 post url: #{inspect path}")
+      {:ok, %{"success" => true}}
+    end
+  end
+
   def post_order(pair, type, volume, price, post_only) do
     "/postorder?pair=" <> pair <> "&type=" <> type <> "&volume=" <> volume <> "&price=" <> price <> "&post_only=" <> post_only
+    |> invoke_private_api_v1_post()
+  end
+
+  def stop_order(order_id) do
+    "/stoporder?order_id=" <> order_id
     |> invoke_private_api_v1_post()
   end
 

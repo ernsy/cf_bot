@@ -5,7 +5,7 @@ defmodule CfLuno.Statem do
 
   import String, only: [to_float: 1]
 
-  @delta_time 5000
+  @delta_time 60000
   @dt_perc 0.01
   @ut_perc 0.005
   @stable_perc 0.001
@@ -178,7 +178,6 @@ defmodule CfLuno.Statem do
     resp["orders"]
     |> process_orders(before_limit_vol, new_limit_vol)
   end
-
   defp check_vol_and_process_order(_before_limit_vol, _new_limit_vol) do
     {:ok, "volume to sell below minimum order volume"}
   end
@@ -270,7 +269,8 @@ defmodule CfLuno.Statem do
     end
   end
   defp place_order(curr_limit_price, _curr_limit_vol, order_id, new_limit_price, new_limit_vol) do
-    Logger.info("Cancel limit sell order #{inspect order_id} at #{inspect curr_limit_price}")
+    {:ok, %{"success" => true}} = CfLuno.Api.stop_order(order_id)
+    Logger.info("Cancelled limit sell order #{inspect order_id} at #{inspect curr_limit_price}")
     Logger.info("New limit sell order for #{inspect new_limit_vol} at #{inspect new_limit_price}")
   end
 
