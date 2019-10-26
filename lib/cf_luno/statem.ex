@@ -17,11 +17,10 @@ defmodule CfLuno.Statem do
   @short_stable_timeout_action {{:timeout, :check_oracle_price}, @short_stable_delta_time, :check_oracle_price}
   @long_stable_timeout_action {{:timeout, :check_oracle_price}, @long_stable_delta_time, :check_oracle_price}
   @unstable_timeout_action {{:timeout, :check_oracle_price}, @unstable_delta_time, :check_oracle_price}
-  @order_review_timeout_action {:state_timeout, @order_review_time, :limit_sell_order}
+  @order_review_timeout_action {:state_timeout, @order_review_time, :limit_sell}
 
-  @short_limit_sell_order_action {:next_event, :internal, {:limit_sell_order, @short_stable_timeout_action}}
-  @long_limit_sell_order_action {:next_event, :internal, {:limit_sell_order, @long_stable_timeout_action}}
-  #@market_sell_order_action {:next_event, :internal, :market_sell_order}
+  @short_limit_sell_action {:next_event, :internal, {:limit_sell, @short_stable_timeout_action}}
+  @long_limit_sell_action {:next_event, :internal, {:limit_sell, @long_stable_timeout_action}}
   @cancel_order_action {:next_event, :internal, :cancel_order}
 
   #---------------------------------------------------------------------------------------------------------------------
@@ -87,37 +86,37 @@ defmodule CfLuno.Statem do
         } = data
       ) do
     current_oracle_price = get_oracle_price()
-    Logger.info(
-      "Check oracle price state: #{inspect state}
-      old_price:  #{inspect old_oracle_price}
-      curr_price: #{inspect current_oracle_price}
-      date:       #{inspect {:erlang.date, :erlang.time}}"
-    )
+    #Logger.info(
+    #  "Check oracle price state: #{inspect state}
+    #  old_price:  #{inspect old_oracle_price}
+    #  curr_price: #{inspect current_oracle_price}
+    #  date:       #{inspect :erlang.date}"
+    #)
     new_data = %{data | oracle_price: current_oracle_price}
     opt = case state do
       :wait_stable ->
         %{
-          stable: {:sell, @long_limit_sell_order_action},
+          stable: {:sell, @long_limit_sell_action},
           up_trend: {:wait_stable, @unstable_timeout_action},
-          down_trend: {:quick_sell, @short_limit_sell_order_action},
+          down_trend: {:quick_sell, @short_limit_sell_action},
           positive: {:wait_stable, @unstable_timeout_action},
-          negative: {:sell, @long_limit_sell_order_action}
+          negative: {:sell, @long_limit_sell_action}
         }
       :sell ->
         %{
-          stable: {:sell, @long_limit_sell_order_action},
+          stable: {:sell, @long_limit_sell_action},
           up_trend: {:wait_stable, @cancel_order_action},
-          down_trend: {:quick_sell, @short_limit_sell_order_action},
-          positive: {:sell, @long_limit_sell_order_action},
-          negative: {:sell, @long_limit_sell_order_action}
+          down_trend: {:quick_sell, @short_limit_sell_action},
+          positive: {:sell, @long_limit_sell_action},
+          negative: {:sell, @long_limit_sell_action}
         }
       :quick_sell ->
         %{
-          stable: {:sell, @long_limit_sell_order_action},
+          stable: {:sell, @long_limit_sell_action},
           up_trend: {:wait_stable, @cancel_order_action},
-          down_trend: {:quick_sell, @short_limit_sell_order_action},
-          positive: {:sell, @long_limit_sell_order_action},
-          negative: {:sell, @long_limit_sell_order_action}
+          down_trend: {:quick_sell, @short_limit_sell_action},
+          positive: {:sell, @long_limit_sell_action},
+          negative: {:sell, @long_limit_sell_action}
         }
     end
     check_delta(old_oracle_price, current_oracle_price, new_data, opt)
@@ -136,34 +135,28 @@ defmodule CfLuno.Statem do
     {:keep_state, data, @unstable_timeout_action}
   end
 
-  def handle_event(:internal, {:limit_sell_order, post_action}, :sell, %{btc_hodl: btc_hodl}) do
+  def handle_event(:internal, {:limit_sell, post_action}, :sell, %{btc_hodl: btc_hodl}) do
     new_limit_vol = calc_limit_vol(btc_hodl)
     check_vol_and_process_order(new_limit_vol, new_limit_vol)
     {:keep_state_and_data, [@order_review_timeout_action, post_action]}
   end
 
-  def handle_event(:state_timeout, :limit_sell_order, :sell, %{btc_hodl: btc_hodl}) do
+  def handle_event(:state_timeout, :limit_sell, :sell, %{btc_hodl: btc_hodl}) do
     new_limit_vol = calc_limit_vol(btc_hodl)
     check_vol_and_process_order(new_limit_vol, new_limit_vol)
     {:keep_state_and_data, @order_review_timeout_action}
   end
 
-  def handle_event(:internal, {:limit_sell_order, post_action}, :quick_sell, %{btc_hodl: btc_hodl}) do
+  def handle_event(:internal, {:limit_sell, post_action}, :quick_sell, %{btc_hodl: btc_hodl}) do
     new_limit_vol = calc_limit_vol(btc_hodl)
     check_vol_and_process_order(0, new_limit_vol)
     {:keep_state_and_data, [@order_review_timeout_action, post_action]}
   end
 
-  def handle_event(:state_timeout, :limit_sell_order, :quick_sell, %{btc_hodl: btc_hodl}) do
+  def handle_event(:state_timeout, :limit_sell, :quick_sell, %{btc_hodl: btc_hodl}) do
     new_limit_vol = calc_limit_vol(btc_hodl)
     check_vol_and_process_order(0, new_limit_vol)
     {:keep_state_and_data, @order_review_timeout_action}
-  end
-
-  def handle_event(:internal, :market_sell_order, :quick_sell, data) do
-    bid_price = get_luno_price("bid")
-    Logger.warn("Market order at #{inspect bid_price}")
-    {:keep_state, data, @short_limit_sell_order_action}
   end
 
   def handle_event(:info, {:ssl_closed, _}, _state, _data) do
@@ -203,6 +196,8 @@ defmodule CfLuno.Statem do
       change_perc when abs(change_perc) < @stable_perc ->
         opt.stable
       change_perc when change_perc > @ut_perc ->
+        bid_price = get_luno_price("bid")
+        Logger.info("Current Luno bid price:#{inspect bid_price}")
         opt.up_trend
       change_perc when change_perc < -@dt_perc ->
         opt.down_trend
@@ -231,6 +226,8 @@ defmodule CfLuno.Statem do
     |> process_orders(before_limit_vol, new_limit_vol)
   end
   defp check_vol_and_process_order(_before_limit_vol, _new_limit_vol) do
+    ask_price = get_luno_price("ask")
+    Logger.info("Current Luno ask price:#{inspect ask_price}")
     {:ok, "volume to sell below minimum order volume"}
   end
 
