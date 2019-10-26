@@ -5,7 +5,7 @@ defmodule CfLuno.Statem do
 
   import String, only: [to_float: 1]
 
-  @delta_time 30000
+  @delta_time 5000
   @dt_perc 0.001
   @ut_perc 0.0005
   @stable_perc 0.001
@@ -70,35 +70,40 @@ defmodule CfLuno.Statem do
     new_data = %{data | oracle_price: current_oracle_price}
     opt = case state do
       :wait_stable ->
-        [
+        %{
           stable: {:sell, @limit_sell_order_action},
-          down_trend: {:quick_sell, @market_sell_order_action},
           up_trend: {:wait_stable, @timeout_action},
+          down_trend: {:quick_sell, @market_sell_order_action},
           positive: {:wait_stable, @timeout_action},
           negative: {:sell, @limit_sell_order_action}
-        ]
+        }
       :sell ->
-        [
+        %{
           stable: {:sell, @limit_sell_order_action},
+          up_trend: {:wait_stable, @cancel_order_action},
           down_trend: {:quick_sell, @market_sell_order_action},
-          up_trend: {:wait_stable, @cancel_order_action},
           positive: {:sell, @limit_sell_order_action},
           negative: {:sell, @limit_sell_order_action}
-        ]
+        }
       :quick_sell ->
-        [
+        %{
           stable: {:sell, @limit_sell_order_action},
-          down_trend: {:quick_sell, @limit_sell_order_action},
           up_trend: {:wait_stable, @cancel_order_action},
+          down_trend: {:quick_sell, @limit_sell_order_action},
           positive: {:sell, @limit_sell_order_action},
           negative: {:sell, @limit_sell_order_action}
-        ]
+        }
     end
     check_delta(old_oracle_price, current_oracle_price, new_data, opt)
   end
 
   def handle_event(:internal, :cancel_order, :wait_stable, data) do
-    Logger.warn("Cancel limit order")
+    {:ok, resp} = CfLuno.Api.list_orders("XBTZAR", "PENDING")
+    order = resp["orders"]
+    order_id = order["order_id"]
+    {:ok, %{"success" => true}} = CfLuno.Api.stop_order(order_id)
+    {curr_limit_price, _} = Integer.parse(order["limit_price"])
+    Logger.info("Cancelled limit sell order #{inspect order_id} at #{inspect curr_limit_price}")
     {:keep_state, data, @timeout_action}
   end
 
@@ -150,26 +155,23 @@ defmodule CfLuno.Statem do
          old_price,
          curr_price,
          new_data,
-         [
-           stable: {s_state, s_action},
-           down_trend: {dt_state, dt_action},
-           up_trend: {ut_state, ut_action},
-           positive: {p_state, p_action},
-           negative: {n_state, n_action},
-         ]
+         opt
        ) do
-    case (curr_price - old_price) / old_price  do
+    delta_perc = (curr_price - old_price) / old_price
+    {next_state, next_action} = case delta_perc do
       change_perc when abs(change_perc) < @stable_perc ->
-        {:next_state, s_state, new_data, s_action}
+        opt.stable
       change_perc when change_perc > @ut_perc ->
-        {:next_state, ut_state, new_data, ut_action}
+        opt.up_trend
       change_perc when change_perc < -@dt_perc ->
-        {:next_state, dt_state, new_data, dt_action}
+        opt.down_trend
       change_perc when change_perc > 0 ->
-        {:next_state, p_state, new_data, p_action}
+        opt.positive
       change_perc when change_perc < 0 ->
-        {:next_state, n_state, new_data, n_action}
+        opt.negative
     end
+    Logger.info("Delta percentage:#{inspect Float.round(delta_perc, 4)}, next_state #{inspect next_state}")
+    {:next_state, next_state, new_data, next_action}
   end
 
   defp check_vol_and_process_order(before_limit_vol, new_limit_vol) when new_limit_vol >= @min_order_vol do

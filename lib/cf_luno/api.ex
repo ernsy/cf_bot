@@ -34,25 +34,25 @@ defmodule CfLuno.Api do
     |> invoke_private_api_v1_get()
   end
 
-  StrippedInRelease.fun do
-    def post_order(pair, type, volume, price, post_only) when is_binary(post_only) do
-      path = "/postorder?pair=" <> pair <> "&type=" <> type <> "&volume=" <> volume <> "&price=" <> price <> "&post_only=" <> post_only
-      Logger.debug("private api v1 post url: #{inspect path}")
-      {:ok, %{"order_id" => "TestOrderID"}}
-    end
-  end
+  #StrippedInRelease.fun do
+  #  def post_order(pair, type, volume, price, post_only) when is_binary(post_only) do
+  #    path = "/postorder?pair=" <> pair <> "&type=" <> type <> "&volume=" <> volume <> "&price=" <> price <> "&post_only=" <> post_only
+  #    Logger.debug("private api v1 post url: #{inspect path}")
+  #    {:ok, %{"order_id" => "TestOrderID"}}
+  #  end
+  #end
   def post_order(pair, type, volume, price, post_only) do
     "/postorder?pair=" <> pair <> "&type=" <> type <> "&volume=" <> volume <> "&price=" <> price <> "&post_only=" <> post_only
     |> invoke_private_api_v1_post()
   end
 
-  StrippedInRelease.fun do
-    def stop_order(order_id) when is_binary(order_id) do
-      path = "/stoporder?order_id=" <> order_id
-      Logger.debug("private api v1 post url: #{inspect path}")
-      {:ok, %{"success" => true}}
-    end
-  end
+  #StrippedInRelease.fun do
+  #  def stop_order(order_id) when is_binary(order_id) do
+  #    path = "/stoporder?order_id=" <> order_id
+  #    Logger.debug("private api v1 post url: #{inspect path}")
+  #    {:ok, %{"success" => true}}
+  #  end
+  #end
   def stop_order(order_id) do
     "/stoporder?order_id=" <> order_id
     |> invoke_private_api_v1_post()
