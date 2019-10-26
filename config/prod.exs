@@ -28,5 +28,8 @@ config :logger,
 config :logger,
        :error_log,
        path: "./cf.log",
-       level: :debug
-       #,metadata: [:module, :line, :function]
+       level: :info
+
+config :logger, :console,
+       level: :info,
+       metadata: [:module, :line, :function]
