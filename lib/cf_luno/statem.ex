@@ -9,9 +9,10 @@ defmodule CfLuno.Statem do
   @long_stable_delta_time 30000
   @unstable_delta_time 60000
   @order_review_time 5000
-  @dt_perc 0.001
-  @ut_perc 0.001
-  @stable_perc 0.0001
+
+  @dt_perc 0.002
+  @ut_perc 0.002
+  @stable_perc 0.0005
   @min_order_vol 0.0005
 
   @short_stable_timeout_action {{:timeout, :check_oracle_price}, @short_stable_delta_time, :check_oracle_price}
@@ -206,7 +207,8 @@ defmodule CfLuno.Statem do
       change_perc when change_perc < 0 ->
         opt.negative
     end
-    Logger.info("Delta percentage:#{inspect Float.round(delta_perc, 4)}, next_state #{inspect next_state}")
+    dp = Float.round(delta_perc, 4)
+    Logger.info("CB price:#{inspect curr_price}, delta:#{inspect dp}, next_state:#{inspect next_state}")
     {:next_state, next_state, new_data, next_action}
   end
 
