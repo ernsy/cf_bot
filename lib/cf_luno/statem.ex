@@ -18,12 +18,8 @@ defmodule CfLuno.Statem do
     GenStateMachine.start_link(__MODULE__, init_data, name: __MODULE__)
   end
 
-  def start_stable() do
+  def pause() do
     GenStateMachine.cast(__MODULE__, :start_stable)
-  end
-
-  def start_unstable() do
-    GenStateMachine.cast(__MODULE__, :start_unstable)
   end
 
   def set_btc_hodl(btc_amount) do
@@ -48,14 +44,9 @@ defmodule CfLuno.Statem do
     {:ok, :wait_stable, new_data, Const.unstable_timeout_action}
   end
 
-  def handle_event(:cast, :start_stable, state, %{btc_hodl: btc_amount}) do
-    Logger.info("Starting stable with btc_hodl amount:#{inspect btc_amount}, state:#{inspect state}")
-    {:keep_state_and_data, Const.short_stable_timeout_action}
-  end
-
-  def handle_event(:cast, :start_unstable, state, %{btc_hodl: btc_amount}) do
-    Logger.info("Starting unstable with btc_hodl amount:#{inspect btc_amount}, state:#{inspect state}")
-    {:keep_state_and_data, Const.unstable_timeout_action}
+  def handle_event(:cast, :pause, state, %{btc_hodl: btc_amount}) do
+    Logger.info("Pausing with btc_hodl amount:#{inspect btc_amount}, state:#{inspect state}")
+    {:keep_state_and_data, Const.pause_timeout_actions}
   end
 
   def handle_event(:cast, {:set_btc_hodl, btc_amount}, state, data) do
@@ -73,12 +64,6 @@ defmodule CfLuno.Statem do
         } = data
       ) do
     current_oracle_price = get_oracle_price()
-    #Logger.info(
-    #  "Check oracle price state: #{inspect state}
-    #  old_price:  #{inspect old_oracle_price}
-    #  curr_price: #{inspect current_oracle_price}
-    #  date:       #{inspect :erlang.date}"
-    #)
     new_data = %{data | oracle_price: current_oracle_price}
     opt = case state do
       :wait_stable ->
@@ -165,8 +150,6 @@ defmodule CfLuno.Statem do
       change_perc when abs(change_perc) < @stable_perc ->
         opt.stable
       change_perc when change_perc > @ut_perc ->
-        bid_price = get_luno_price("bid")
-        Logger.info("Current Luno bid price:#{inspect bid_price}")
         opt.up_trend
       change_perc when change_perc < -@dt_perc ->
         opt.down_trend
@@ -175,7 +158,11 @@ defmodule CfLuno.Statem do
       change_perc when change_perc < 0 ->
         opt.negative
     end
-    Logger.info("Delta percentage:#{inspect Float.round(delta_perc, 4)}, next_state #{inspect next_state}")
+    Logger.info(
+      "Curr CB price:#{inspect curr_price}, delta percentage:#{inspect Float.round(delta_perc, 4)}, next_state:#{
+        inspect next_state
+      }"
+    )
     {:next_state, next_state, new_data, next_action}
   end
 

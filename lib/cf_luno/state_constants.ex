@@ -9,6 +9,10 @@ defmodule CfLuno.StateConstants do
   def long_stable_timeout_action, do: {{:timeout, :check_oracle_price}, long_stable_delta_time(), :check_oracle_price}
   def unstable_timeout_action, do: {{:timeout, :check_oracle_price}, unstable_delta_time(), :check_oracle_price}
   def order_review_timeout_action, do: {:state_timeout, order_review_time(), :limit_sell}
+  def pause_timeout_actions, do: [
+                               {{:timeout, :check_oracle_price}, :infinity, :check_oracle_price},
+                               {:state_timeout, :infinity, :limit_sell}
+  ]
 
   def quick_limit_sell_action, do: {:next_event, :internal, {:limit_sell, short_stable_timeout_action()}}
   def quick_limit_buy_action, do: {:next_event, :internal, {:limit_buy, short_stable_timeout_action()}}
@@ -99,6 +103,64 @@ defmodule CfLuno.StateConstants do
         down_trend: {:wait_stable, unstable_timeout_action()},
         positive: {:wait_stable, unstable_timeout_action()},
         negative: {:wait_stable, unstable_timeout_action()}
+      }
+    }
+  end
+
+  def buy do
+    %{
+      btc_and_zar:
+      %{
+        stable: {:buy, limit_buy_action()},
+        up_trend: {:quick_buy, quick_limit_buy_action()},
+        down_trend: {:quick_sell, quick_limit_sell_action()},
+        positive: {:buy, limit_buy_action()},
+        negative: {:buy, limit_sell_action()}
+      },
+      only_btc:
+      %{
+        stable: {:wait_stable, unstable_timeout_action()},
+        up_trend: {:wait_stable, unstable_timeout_action()},
+        down_trend: {:quick_sell, quick_limit_sell_action()},
+        positive: {:wait_stable, unstable_timeout_action()},
+        negative: {:wait_stable, unstable_timeout_action()}
+      },
+      only_zar:
+      %{
+        stable: {:buy, limit_buy_action()},
+        up_trend: {:quick_buy, quick_limit_buy_action()},
+        down_trend: {:wait_stable, unstable_timeout_action()},
+        positive: {:buy, limit_buy_action()},
+        negative: {:buy, unstable_timeout_action()}
+      }
+    }
+  end
+
+  def quick_buy do
+    %{
+      btc_and_zar:
+      %{
+        stable: {:buy, limit_sell_action()},
+        up_trend: {:quick_buy, quick_limit_buy_action()},
+        down_trend: {:quick_sell, quick_limit_sell_action()},
+        positive: {:buy, limit_sell_action()},
+        negative: {:buy, limit_sell_action()}
+      },
+      only_btc:
+      %{
+        stable: {:wait_stable, unstable_timeout_action()},
+        up_trend: {:wait_stable, unstable_timeout_action()},
+        down_trend: {:quick_sell, quick_limit_sell_action()},
+        positive: {:wait_stable, unstable_timeout_action()},
+        negative: {:wait_stable, unstable_timeout_action()}
+      },
+      only_zar:
+      %{
+        stable: {:buy, limit_sell_action()},
+        up_trend: {:quick_buy, quick_limit_buy_action()},
+        down_trend: {:wait_stable, unstable_timeout_action()},
+        positive: {:buy, limit_sell_action()},
+        negative: {:buy, limit_sell_action()}
       }
     }
   end
