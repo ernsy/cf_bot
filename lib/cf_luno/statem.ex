@@ -10,8 +10,8 @@ defmodule CfLuno.Statem do
   @unstable_delta_time 60000
   @order_review_time 5000
 
-  @dt_perc 0.002
-  @ut_perc 0.002
+  @dt_perc 0.001
+  @ut_perc 0.001
   @stable_perc 0.0005
   @min_order_vol 0.0005
 
@@ -242,6 +242,7 @@ defmodule CfLuno.Statem do
       orders,
       fn (order) ->
         order_id = order["order_id"]
+        {:ok, %{"success" => true}} = CfLuno.Api.stop_order(order_id)
         Logger.info("Cancel order id #{inspect order_id} for #{inspect order["limit_price"]}")
       end
     )
