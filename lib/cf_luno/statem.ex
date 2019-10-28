@@ -10,25 +10,8 @@ defmodule CfLuno.Statem do
   @stable_perc 0.0005
   @min_order_vol 0.0005
 
-  @short_stable_delta_time 1500
-  @long_stable_delta_time 3000
-  @unstable_delta_time 6000
+  @start_delta_time 60000
   @review_time 5000
-
-  @short_stable_timeout_action {{:timeout, :check_oracle_price}, @short_stable_delta_time, :check_oracle_price}
-  @long_stable_timeout_action {{:timeout, :check_oracle_price}, @long_stable_delta_time, :check_oracle_price}
-  @unstable_timeout_action {{:timeout, :check_oracle_price}, @unstable_delta_time, :check_oracle_price}
-  @review_timeout_action {:state_timeout, @review_time, {:limit_sell, @review_timeout_action}}
-  @pause_timeout_actions [
-    {{:timeout, :check_oracle_price}, :infinity, :check_oracle_price},
-    {:state_timeout, :infinity, :limit_sell}
-  ]
-
-  @quick_limit_sell_action {:next_event, :internal, {:limit_sell, [@review_timeout_action, @short_stable_timeout_action]}}
-  @quick_limit_buy_action {:next_event, :internal, {:limit_buy, [@review_timeout_action, @short_stable_timeout_action]}}
-  @limit_sell_action {:next_event, :internal, {:limit_sell, [@review_timeout_action, @long_stable_timeout_action]}}
-  @limit_buy_action {:next_event, :internal, {:limit_buy, [@review_timeout_action,@long_stable_timeout_action]}}
-  @cancel_order_action {:next_event, :internal, :cancel_order}
 
   #---------------------------------------------------------------------------------------------------------------------
   # api
@@ -58,12 +41,18 @@ defmodule CfLuno.Statem do
     end
     oracle_price = get_oracle_price()
     new_data = %{:btc_to_sell => btc_amount, :oracle_price => oracle_price, }
-    {:ok, :wait_stable, new_data, @unstable_timeout_action}
+    {:ok, :wait_stable, new_data, {{:timeout, :check_oracle_price}, @start_delta_time, :check_oracle_price}}
   end
 
   def handle_event(:cast, :pause, state, %{btc_to_sell: btc_amount}) do
     Logger.info("Pausing with btc_sell amount:#{inspect btc_amount}, state:#{inspect state}")
-    {:keep_state_and_data, @pause_timeout_actions}
+    {
+      :keep_state_and_data,
+      [
+        {{:timeout, :check_oracle_price}, :infinity, :check_oracle_price},
+        {:state_timeout, :infinity, :limit_sell}
+      ]
+    }
   end
 
   def handle_event(:cast, {:set_btc_to_sell, btc_amount}, state, data) do
@@ -80,12 +69,12 @@ defmodule CfLuno.Statem do
       ) do
     current_oracle_price = get_oracle_price()
     new_data = %{data | oracle_price: current_oracle_price}
-    opts = case state do
-      :wait_stable -> wait_stable_opts()
-      state when state == :sell or state == :quick_sell -> sell_opts()
-      state when state == :buy or state == :quick_buy -> buy_opts()
+    transitions = case state do
+      :wait_stable -> CfLuno.Transitions.wait_stable()
+      state when state == :sell or state == :quick_sell -> CfLuno.Transitions.sell
+      state when state == :buy or state == :quick_buy -> CfLuno.Transitions.buy
     end
-    {next_state, next_action} = check_delta(old_oracle_price, current_oracle_price, new_data, opts)
+    {next_state, next_action} = check_delta(old_oracle_price, current_oracle_price, transitions)
     {:next_state, next_state, new_data, next_action}
   end
 
@@ -103,18 +92,18 @@ defmodule CfLuno.Statem do
     :keep_state_and_data
   end
 
-  def handle_event(event_type, {:limit_sell, post_action}, :sell, %{btc_to_sell: btc_amnt})
+  def handle_event(event_type, {:limit_sell, post_actions}, :sell, %{btc_to_sell: btc_amnt})
       when event_type == :internal or event_type == :state_timeout  do
     new_limit_vol = calc_limit_vol(btc_amnt)
     check_vol_and_process_order(new_limit_vol, new_limit_vol)
-    {:keep_state_and_data, post_action}
+    {:keep_state_and_data, [{:state_timeout, @review_time, {:limit_sell, []}} | post_actions]}
   end
 
-  def handle_event(event_type, {:limit_sell, post_action}, :quick_sell, %{btc_to_sell: btc_amnt})
+  def handle_event(event_type, {:limit_sell, post_actions}, :quick_sell, %{btc_to_sell: btc_amnt})
       when event_type == :internal or event_type == :state_timeout do
     new_limit_vol = calc_limit_vol(btc_amnt)
     check_vol_and_process_order(0, new_limit_vol)
-    {:keep_state_and_data, post_action}
+    {:keep_state_and_data, [{:state_timeout, @review_time, {:limit_sell, []}} | post_actions]}
   end
 
   def handle_event(:info, {:ssl_closed, _}, _state, _data) do
@@ -143,7 +132,7 @@ defmodule CfLuno.Statem do
     i_price
   end
 
-  defp check_delta(old_price, curr_price, new_data, opts) do
+  defp check_delta(old_price, curr_price, opts) do
     delta_perc = (curr_price - old_price) / old_price
     Logger.info("Delta perc:#{inspect Float.round(delta_perc, 4)}")
     {next_state, next_action} = case delta_perc do
@@ -262,93 +251,6 @@ defmodule CfLuno.Statem do
     Process.sleep(250)
     {:ok, %{}} = CfLuno.Api.post_order("XBTZAR", "ASK", vol_str, to_string(new_limit_price), "true")
     Logger.info("Placed limit sell order for #{inspect vol_str} at #{inspect new_limit_price}")
-  end
-
-  defp wait_stable_opts() do
-    %{
-      btc_and_zar:
-      %{
-        stable: {:sell, @limit_sell_action},
-        up_trend: {:quick_buy, @quick_limit_buy_action},
-        down_trend: {:quick_sell, @quick_limit_sell_action},
-        positive: {:buy, @limit_buy_action},
-        negative: {:sell, @limit_sell_action}
-      },
-      only_btc:
-      %{
-        stable: {:sell, @limit_sell_action},
-        up_trend: {:wait_stable, @unstable_timeout_action},
-        down_trend: {:quick_sell, @quick_limit_sell_action},
-        positive: {:wait_stable, @unstable_timeout_action},
-        negative: {:sell, @limit_sell_action}
-      },
-      only_zar:
-      %{
-        stable: {:buy, @limit_buy_action},
-        up_trend: {:quick_buy, @quick_limit_buy_action},
-        down_trend: {:wait_stable, @unstable_timeout_action},
-        positive: {:buy, @limit_buy_action},
-        negative: {:wait_stable, @unstable_timeout_action}
-      }
-    }
-  end
-
-  defp sell_opts() do
-    %{
-      btc_and_zar:
-      %{
-        stable: {:sell, @limit_sell_action},
-        up_trend: {:quick_buy, [@cancel_order_action, @quick_limit_buy_action]},
-        down_trend: {:quick_sell, @quick_limit_sell_action},
-        positive: {:sell, @limit_sell_action},
-        negative: {:sell, @limit_sell_action}
-      },
-      only_btc:
-      %{
-        stable: {:sell, @limit_sell_action},
-        up_trend: {:wait_stable, [@cancel_order_action, @unstable_timeout_action]},
-        down_trend: {:quick_sell, @quick_limit_sell_action},
-        positive: {:sell, @limit_sell_action},
-        negative: {:sell, @limit_sell_action}
-      },
-      only_zar:
-      %{
-        stable: {:wait_stable, @unstable_timeout_action},
-        up_trend: {:quick_buy, [@cancel_order_action, @quick_limit_buy_action]},
-        down_trend: {:wait_stable, @unstable_timeout_action},
-        positive: {:wait_stable, @unstable_timeout_action},
-        negative: {:wait_stable, @unstable_timeout_action}
-      }
-    }
-  end
-
-  defp buy_opts() do
-    %{
-      btc_and_zar:
-      %{
-        stable: {:buy, @limit_buy_action},
-        up_trend: {:quick_buy, @quick_limit_buy_action},
-        down_trend: {:quick_sell, [@cancel_order_action, @quick_limit_sell_action]},
-        positive: {:buy, @limit_buy_action},
-        negative: {:buy, @limit_sell_action}
-      },
-      only_btc:
-      %{
-        stable: {:wait_stable, @unstable_timeout_action},
-        up_trend: {:wait_stable, @unstable_timeout_action},
-        down_trend: {:quick_sell, [@cancel_order_action, @quick_limit_sell_action]},
-        positive: {:wait_stable, @unstable_timeout_action},
-        negative: {:wait_stable, @unstable_timeout_action}
-      },
-      only_zar:
-      %{
-        stable: {:buy, @limit_buy_action},
-        up_trend: {:quick_buy, @quick_limit_buy_action},
-        down_trend: {:wait_stable, @unstable_timeout_action},
-        positive: {:buy, @limit_buy_action},
-        negative: {:buy, @unstable_timeout_action}
-      }
-    }
   end
 
 end
