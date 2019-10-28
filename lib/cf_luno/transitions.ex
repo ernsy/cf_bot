@@ -13,7 +13,7 @@ defmodule CfLuno.Transitions do
   @quick_limit_buy_action {:next_event, :internal, {:limit_buy, [@short_stable_timeout_action]}}
   @limit_sell_action {:next_event, :internal, {:limit_sell, [@long_stable_timeout_action]}}
   @limit_buy_action {:next_event, :internal, {:limit_buy, [@long_stable_timeout_action]}}
-  @cancel_order_action {:next_event, :internal, :cancel_order}
+  @cancel_order_action {:next_event, :internal, :cancel_orders}
 
   defp wait_stable() do
     %{

@@ -78,20 +78,6 @@ defmodule CfLuno.Statem do
     {:next_state, next_state, new_data, next_action}
   end
 
-  def handle_event(:internal, :cancel_order, _state, _data) do
-    {:ok, resp} = CfLuno.Api.list_orders("XBTZAR", "PENDING")
-    orders = resp["orders"]
-    if orders do
-      order = hd(orders)
-      order_id = order["order_id"]
-      type = order["type"]
-      {curr_limit_price, _} = Integer.parse(order["limit_price"])
-      {:ok, %{"success" => true}} = CfLuno.Api.stop_order(order_id)
-      Logger.info("Cancelled #{inspect type} order:#{inspect order_id} at #{inspect curr_limit_price}")
-    end
-    :keep_state_and_data
-  end
-
   def handle_event(event_type, {:limit_sell, post_actions}, :sell, %{btc_to_sell: btc_amnt})
       when event_type == :internal or event_type == :state_timeout  do
     new_limit_vol = calc_limit_vol(btc_amnt)
@@ -106,8 +92,19 @@ defmodule CfLuno.Statem do
     {:keep_state_and_data, [{:state_timeout, @review_time, {:limit_sell, []}} | post_actions]}
   end
 
+  def handle_event(:internal, :cancel_orders, _state, _data) do
+    {:ok, resp} = CfLuno.Api.list_orders("XBTZAR", "PENDING")
+    cancel_orders(resp["orders"])
+    :keep_state_and_data
+  end
+
   def handle_event(:info, {:ssl_closed, _}, _state, _data) do
-    {:keep_state_and_data, []}
+    :keep_state_and_data
+  end
+
+  def handle_event(event_type, event_content, state, _data) do
+    Logger.warn("Unhandled event:#{inspect [type: event_type, content: event_content, state: state]}")
+    :keep_state_and_data
   end
 
   def terminate(_reason, _state, _data) do
@@ -164,13 +161,7 @@ defmodule CfLuno.Statem do
     place_order(new_limit_price, new_limit_vol)
   end
   defp process_orders(orders, before_limit_vol, new_limit_vol) when length(orders) > 1 do
-    Enum.each(
-      orders,
-      fn (order) ->
-        order_id = order["order_id"]
-        Logger.info("Cancel order id #{inspect order_id} for #{inspect order["limit_price"]}")
-      end
-    )
+    cancel_orders(orders)
     {:ok, new_limit_price} = calc_limit_order_price(before_limit_vol, 0, 0)
     place_order(new_limit_price, new_limit_vol)
   end
@@ -251,6 +242,20 @@ defmodule CfLuno.Statem do
     Process.sleep(250)
     {:ok, %{}} = CfLuno.Api.post_order("XBTZAR", "ASK", vol_str, to_string(new_limit_price), "true")
     Logger.info("Placed limit sell order for #{inspect vol_str} at #{inspect new_limit_price}")
+  end
+
+  def cancel_orders(nil) do
+    :ok
+  end
+  def cancel_orders(orders) do
+    Enum.each(
+      orders,
+      fn (order) ->
+        order_id = order["order_id"]
+        {:ok, %{"success" => true}} = CfLuno.Api.stop_order(order_id)
+        Logger.info("Cancelled order id #{inspect order_id} for #{inspect order["limit_price"]}")
+      end
+    )
   end
 
 end
