@@ -37,8 +37,10 @@ defmodule CfLuno.Api do
     vol_str = :erlang.float_to_binary(volume, [{:decimals, 6}])
     price_str = to_string(price)
     Logger.info("Mock limit sell order for #{inspect vol_str} at #{inspect price_str}")
+    path = "/postorder?pair=" <> pair <> "&type=" <> type <> "&volume=" <> volume <> "&price=" <> price <> "&post_only=" <> post_only
+    Logger.info("private api v1 post url: #{inspect path}")
     timestamp = :erlang.system_time(:millisecond)
-    {:ok, %{"order_id" => "TestOrderID", "timestamp" => new_order_time}}
+    {:ok, %{"order_id" => "TestOrderID", "timestamp" => timestamp}}
   end
 
   def post_order(pair, type, volume, price, post_only) do
@@ -56,12 +58,20 @@ defmodule CfLuno.Api do
 
   def stop_order(order_id, price) when is_binary(order_id) do
     Logger.info("Mock cancel limit sell order #{inspect order_id} at #{inspect price}")
+    path = "/stoporder?order_id=" <> order_id
+    Logger.debug("private api v1 post url: #{inspect path}")
     {:ok, %{"success" => true}}
   end
   def stop_order(order_id, price) do
     Logger.info("Cancel limit sell order #{inspect order_id} at #{inspect price}")
     "/stoporder?order_id=" <> order_id
     |> invoke_private_api_v1_post()
+  end
+
+  def list_trades(params) do
+    query_str = URI.encode_query(params)
+    "/listtrades?" <> query_str
+    
   end
 
   #---------------------------------------------------------------------------------------------------------------------
