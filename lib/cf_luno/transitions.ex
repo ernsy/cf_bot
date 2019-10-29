@@ -15,7 +15,7 @@ defmodule CfLuno.Transitions do
   @limit_buy_action {:next_event, :internal, {:limit_buy, [@long_stable_timeout_action]}}
   @cancel_order_action {:next_event, :internal, :cancel_orders}
 
-  defp wait_stable() do
+  def wait_stable() do
     %{
       btc_and_zar:
       %{
@@ -44,7 +44,7 @@ defmodule CfLuno.Transitions do
     }
   end
 
-  defp sell() do
+  def sell() do
     %{
       btc_and_zar:
       %{
@@ -73,7 +73,7 @@ defmodule CfLuno.Transitions do
     }
   end
 
-  defp buy() do
+  def buy() do
     %{
       btc_and_zar:
       %{
