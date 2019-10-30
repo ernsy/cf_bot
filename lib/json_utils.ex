@@ -12,7 +12,8 @@ defmodule JsonUtils do
   def retry_req(req_fun, params, retry_count) do
     http_resp = req_fun.(params)
     case decode_json_response(http_resp) do
-      {:error, {429, _body}} ->
+      {:error, {429, body}} ->
+        Logger.warn("Response: {429, #{inspect body}}")
         sleep_and_retry(req_fun, params, retry_count)
       {:error, %HTTPoison.Error{id: nil, reason: reason}} when reason == :closed or :timeout ->
         sleep_and_retry(req_fun, params, retry_count)
