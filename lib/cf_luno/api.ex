@@ -71,7 +71,7 @@ defmodule CfLuno.Api do
   def list_trades(params) do
     query_str = URI.encode_query(params)
     "/listtrades?" <> query_str
-    
+    |> invoke_private_api_v1_get()
   end
 
   #---------------------------------------------------------------------------------------------------------------------
