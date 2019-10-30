@@ -8,7 +8,7 @@ defmodule CfLuno.Statem do
   @short_stable_delta_time 15000
   @long_stable_delta_time 30000
   @unstable_delta_time 60000
-  @order_review_time 5000
+  @order_review_time 1000
 
   @dt_perc 0.001
   @ut_perc 0.001
