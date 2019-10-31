@@ -12,7 +12,7 @@ defmodule CfLuno.Statem do
   @min_zar_order_vol 100
 
 
-  @start_delta_time 60000
+  @start_delta_time 30000
   @review_time 5000
 
   #---------------------------------------------------------------------------------------------------------------------
@@ -89,14 +89,28 @@ defmodule CfLuno.Statem do
     {:keep_state, new_data}
   end
 
-  def handle_event(event_type, :check_oracle_price, state, %{oracle_price: old_oracle_price} = data)
+  def handle_event(
+        event_type,
+        :check_oracle_price,
+        state,
+        %{
+          oracle_price: old_oracle_price,
+          btc_sell_amt: btc_sell_amt,
+          zar_sell_amt: zar_sell_amt
+        } = data
+      )
       when event_type == {:timeout, :check_oracle_price} or event_type == :cast do
     current_oracle_price = get_oracle_price()
     new_data = %{data | oracle_price: current_oracle_price}
+    mode = cond do
+      btc_sell_amt > 0 and zar_sell_amt > 0 -> :btc_and_zar
+      btc_sell_amt > 0 -> :btc_only
+      zar_sell_amt > 0 -> :zar_only
+    end
     transitions = case state do
-      :wait_stable -> Transitions.wait_stable()
-      state when state == :sell or state == :quick_sell -> Transitions.sell()
-      state when state == :buy or state == :quick_buy -> Transitions.buy()
+      :wait_stable -> Transitions.wait_stable()[mode]
+      state when state == :sell or state == :quick_sell -> Transitions.sell()[mode]
+      state when state == :buy or state == :quick_buy -> Transitions.buy()[mode]
     end
     {next_state, next_action} = check_delta(old_oracle_price, current_oracle_price, transitions)
     Logger.info("CB price:#{inspect current_oracle_price}, next_state:#{inspect next_state}")
@@ -175,11 +189,11 @@ defmodule CfLuno.Statem do
     :keep_state_and_data
   end
 
-  #def handle_event(_event_type, {id, _}, state, data)
-  #    when (id == :limit_buy or id == :limit_sell) and state != :wait_stable do
-  #  Logger.warn("Nothing left to buy or sell data:#{inspect data}")
-  #  :keep_state_and_data
-  #end
+  def handle_event(event_type, {id, _} = event_content, state, data)
+      when (id == :limit_buy or id == :limit_sell) and state != :wait_stable do
+    Logger.info("No sell or buy amount:#{inspect [type: event_type, content: event_content, state: state, data: data]}")
+    :keep_state_and_data
+  end
 
   def handle_event(event_type, event_content, state, data) do
     Logger.warn("Unhandled event:#{inspect [type: event_type, content: event_content, state: state, data: data]}")
@@ -196,14 +210,15 @@ defmodule CfLuno.Statem do
 
   defp get_oracle_price() do
     {:ok, %{"price" => price}} = CfLuno.Api.get_cb_ticker("BTC-USD")
-    to_float(price)
+    {float_price, _rem_bin} = Float.parse(price)
+    float_price
   end
 
   defp get_luno_price(type) do
     {:ok, %{^type => price}} = CfLuno.Api.get_ticker("XBTZAR")
     Logger.info("Luno " <> type <> " price:" <> price)
-    {i_price, _rem_bin} = Integer.parse(price)
-    i_price
+    {int_price, _rem_bin} = Integer.parse(price)
+    int_price
   end
 
   defp get_bal(asset) do
@@ -211,15 +226,15 @@ defmodule CfLuno.Statem do
     to_float(avail_bal) + to_float(unconf_bal)
   end
 
-  defp check_delta(old_price, curr_price, opts) do
+  defp check_delta(old_price, curr_price, transitions) do
     delta_perc = (curr_price - old_price) / old_price
     Logger.info("Delta perc:#{inspect Float.round(delta_perc, 6)}")
     case delta_perc do
-      change_perc when abs(change_perc) < @stable_perc -> opts.only_btc.stable
-      change_perc when change_perc > @ut_perc -> opts.only_btc.up_trend
-      change_perc when change_perc < -@dt_perc -> opts.only_btc.down_trend
-      change_perc when change_perc > 0 -> opts.only_btc.positive
-      change_perc when change_perc < 0 -> opts.only_btc.negative
+      change_perc when abs(change_perc) < @stable_perc -> transitions.stable
+      change_perc when change_perc > @ut_perc -> transitions.up_trend
+      change_perc when change_perc < -@dt_perc -> transitions.down_trend
+      change_perc when change_perc > 0 -> transitions.positive
+      change_perc when change_perc < 0 -> transitions.negative
     end
   end
 
@@ -252,9 +267,9 @@ defmodule CfLuno.Statem do
   end
   defp calc_limit_order_price(before_limit_vol, curr_price, curr_vol, type) do
     {:ok, %{^type => orders}} = CfLuno.Api.get_orderbook_top("XBTZAR")
-    best_order = hd(orders)
-    {best_price, _} = Integer.parse(best_order["price"])
-    Logger.info("Best price:#{inspect best_price}, volume#{inspect best_order["volume"]}")
+    %{"price" => best_order_price, "volume" => best_order_volume} = hd(orders)
+    {best_price_int, _} = Integer.parse(best_order_price)
+    Logger.info("Best price:" <> best_order_price <> ", volume:" <> best_order_volume)
     Enum.reduce_while(
       orders,
       {0, curr_vol},
@@ -270,7 +285,7 @@ defmodule CfLuno.Statem do
             {new_acc_volume, curr_vol}
           end
         if new_acc_volume > before_limit_vol do
-          new_price = calc_best_price(best_price, price, type)
+          new_price = calc_best_price(best_price_int, price, type)
           {:halt, {:ok, new_price}}
         else
           {:cont, {new_acc_volume, rem_limit_vol}}
