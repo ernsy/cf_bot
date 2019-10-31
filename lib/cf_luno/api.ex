@@ -55,7 +55,6 @@ defmodule CfLuno.Api do
   end
 
   def stop_order(order_id), do: stop_order(order_id, "unknown")
-
   def stop_order(order_id, price) when is_binary(order_id) do
     Logger.info("Mock cancel limit order #{inspect order_id} at #{inspect price}")
     path = "/stoporder?order_id=" <> order_id

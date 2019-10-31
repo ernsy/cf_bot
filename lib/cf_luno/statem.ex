@@ -47,6 +47,10 @@ defmodule CfLuno.Statem do
     GenStateMachine.cast(__MODULE__, {:set_amt, :zar_hodl_amt, btc_amount})
   end
 
+  def oracle_update(msg) do
+    GenStateMachine.cast(__MODULE__, {:oracle_update, msg})
+  end
+
   #---------------------------------------------------------------------------------------------------------------------
   # callbacks
   #---------------------------------------------------------------------------------------------------------------------
@@ -65,9 +69,12 @@ defmodule CfLuno.Statem do
           last_order_time: :erlang.system_time(:millisecond)
         }
     end
-    oracle_price = get_oracle_price()
-    new_data = Map.put(data, :oracle_price, oracle_price)
-    Logger.info("Init data:#{inspect data}")
+    {:ok, [oracle_price, time]} = get_oracle_price()
+    queue = :queue.new
+    queue = :queue.in({oracle_price, time}, queue)
+    init_data = %{oracle_price: oracle_price, oracle_queue: {queue, 1}}
+    Logger.info("Init data:#{inspect init_data}")
+    new_data = Map.merge(data, init_data)
     {:ok, :wait_stable, new_data, {{:timeout, :check_oracle_price}, @start_delta_time, :check_oracle_price}}
   end
 
@@ -89,17 +96,35 @@ defmodule CfLuno.Statem do
     {:keep_state, new_data}
   end
 
+  def handle_event(
+        :cast,
+        {:oracle_update, %{"price" => price, "time" => time}},
+        state,
+        %{oracle_queue: {queue, length}} = data
+      ) do
+    new_data = if length > 100 do
+    {{value, {old_price, old_time}}, queue} = :queue.out(queue)
+      new_queue = :queue.in({price, time}, queue)
+    %{data | oracle_queue: {new_queue, length}}
+    else
+      new_queue = :queue.in({price, time}, queue)
+      %{data | oracle_queue: {new_queue, length + 1}}
+    end
+    IO.inspect(new_data)
+    {:keep_state, new_data}
+  end
+
   def handle_event(event_type, :check_oracle_price, state, %{oracle_price: old_oracle_price} = data)
       when event_type == {:timeout, :check_oracle_price} or event_type == :cast do
-    current_oracle_price = get_oracle_price()
-    new_data = %{data | oracle_price: current_oracle_price}
+    {:ok, [oracle_price, _time]} = get_oracle_price()
+    new_data = %{data | oracle_price: oracle_price}
     transitions = case state do
       :wait_stable -> Transitions.wait_stable()
       state when state == :sell or state == :quick_sell -> Transitions.sell()
       state when state == :buy or state == :quick_buy -> Transitions.buy()
     end
-    {next_state, next_action} = check_delta(old_oracle_price, current_oracle_price, transitions)
-    Logger.info("CB price:#{inspect current_oracle_price}, next_state:#{inspect next_state}")
+    {next_state, next_action} = check_delta(old_oracle_price, oracle_price, transitions)
+    Logger.info("CB price:#{inspect oracle_price}, next_state:#{inspect next_state}")
     {:next_state, next_state, new_data, next_action}
   end
 
@@ -195,8 +220,8 @@ defmodule CfLuno.Statem do
   #---------------------------------------------------------------------------------------------------------------------
 
   defp get_oracle_price() do
-    {:ok, %{"price" => price}} = CfLuno.Api.get_cb_ticker("BTC-USD")
-    to_float(price)
+    {:ok, %{"price" => price, "time" => time}} = CfLuno.Api.get_cb_ticker("BTC-USD")
+    {:ok, [to_float(price), time]}
   end
 
   defp get_luno_price(type) do

@@ -9,7 +9,8 @@ defmodule CfLuno.Application do
     children = [
       # Starts a worker by calling: CfLuno.Worker.start_link(arg)
       # {CfLuno.Worker, arg}
-      CfLuno.Statem
+      CfLuno.Statem,
+      {CfLuno.CbWsClient, ["BTC-USD"]}
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
