@@ -102,16 +102,24 @@ defmodule CfLuno.Statem do
         state,
         %{oracle_queue: {queue, length}} = data
       ) do
-    new_data = if length > 100 do
-    {{value, {old_price, old_time}}, queue} = :queue.out(queue)
+    if length > 100 do
+      {{value, {old_price, old_time}}, queue} = :queue.out(queue)
       new_queue = :queue.in({price, time}, queue)
-    %{data | oracle_queue: {new_queue, length}}
+      transitions = case state do
+        :wait_stable -> Transitions.wait_stable()
+        state when state == :sell or state == :quick_sell -> Transitions.sell()
+        state when state == :buy or state == :quick_buy -> Transitions.buy()
+      end
+      {next_state, next_action} = check_delta(old_price, price, transitions)
+      new_data = %{data | oracle_queue: {new_queue, length}}
+      IO.inspect(new_data)
+      {:next_state, next_state, new_data, next_action}
     else
       new_queue = :queue.in({price, time}, queue)
-      %{data | oracle_queue: {new_queue, length + 1}}
+      new_data = %{data | oracle_queue: {new_queue, length + 1}}
+      IO.inspect(new_data)
+      {:keep_state, new_data}
     end
-    IO.inspect(new_data)
-    {:keep_state, new_data}
   end
 
   def handle_event(event_type, :check_oracle_price, state, %{oracle_price: old_oracle_price} = data)
