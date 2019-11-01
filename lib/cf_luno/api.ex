@@ -36,7 +36,7 @@ defmodule CfLuno.Api do
   def post_order(pair, type, volume, price, post_only) when is_binary(pair) do
     vol_str = :erlang.float_to_binary(volume, [{:decimals, 6}])
     price_str = to_string(price)
-    Logger.info("Mock limit sell order for #{inspect vol_str} at #{inspect price_str}")
+    Logger.info("Mock Limit " <> type <> "for " <> vol_str <> " at " <> price_str)
     path = "/postorder?pair=" <> pair <> "&type=" <> type <> "&volume=" <> vol_str <> "&price=" <> price_str <> "&post_only=" <> post_only
     Logger.debug("private api v1 post url: #{inspect path}")
     timestamp = :erlang.system_time(:millisecond)
@@ -46,7 +46,7 @@ defmodule CfLuno.Api do
   def post_order(pair, type, volume, price, post_only) do
     vol_str = :erlang.float_to_binary(volume, [{:decimals, 6}])
     price_str = to_string(price)
-    Logger.info("Limit sell order for #{inspect vol_str} at #{inspect price_str}")
+    Logger.info("Limit " <> type <> "for " <> vol_str <> " at " <> price_str)
     timestamp = :erlang.system_time(:millisecond)
     {:ok, body} =
     "/postorder?pair=" <> pair <> "&type=" <> type <> "&volume=" <> vol_str <> "&price=" <> price_str <> "&post_only=" <> post_only
