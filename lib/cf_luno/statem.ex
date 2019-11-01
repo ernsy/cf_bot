@@ -30,20 +30,20 @@ defmodule CfLuno.Statem do
     GenStateMachine.cast(__MODULE__, :pause)
   end
 
-  def set_btc_sell_amt("BTC", btc_amount) do
-    GenStateMachine.cast(__MODULE__, {:set_amt, :btc_sell_amt, btc_amount})
+  def set_sell_amt(asset, amount) when is_float(amount) do
+    type = cond do
+      asset == "BTC" -> :btc_sell_amt
+      asset == "ZAR" -> :zar_sell_amt
+    end
+    GenStateMachine.cast(__MODULE__, {:set_amt, type, amount})
   end
 
-  def set_btc_hodl_amt("BTC", btc_amount) do
-    GenStateMachine.cast(__MODULE__, {:set_amt, :btc_hodl_amt, btc_amount})
-  end
-
-  def set_zar_sell_amt("ZAR", btc_amount) do
-    GenStateMachine.cast(__MODULE__, {:set_amt, :zar_sell_amt, btc_amount})
-  end
-
-  def set_zar_hodl_amt("ZAR", btc_amount) do
-    GenStateMachine.cast(__MODULE__, {:set_amt, :zar_hodl_amt, btc_amount})
+  def set_hodl_amt(asset, amount) when is_float(amount) do
+    type = cond do
+      asset == "BTC" -> :btc_hodl_amt
+      asset == "ZAR" -> :zar_hodl_amt
+    end
+    GenStateMachine.cast(__MODULE__, {:set_amt, type, amount})
   end
 
   def oracle_update(msg) do
@@ -71,15 +71,15 @@ defmodule CfLuno.Statem do
     {:ok, [oracle_price, time]} = get_oracle_price()
     queue = :queue.new
     queue = :queue.in({oracle_price, time}, queue)
-    init_data = %{oracle_price: oracle_price, oracle_queue: {queue, 1}}
+    init_data = %{oracle_price: oracle_price, oracle_queue: {queue, 1}, pause: false}
     Logger.info("Init data:#{inspect init_data}")
     new_data = Map.merge(data, init_data)
     {:ok, :wait_stable, new_data}
   end
 
-  def handle_event(:cast, :pause, state, %{btc_sell_amt: btc_vol}) do
-    Logger.info("Pausing with btc_sell amount:#{inspect btc_vol}, state:#{inspect state}")
-    {:keep_state_and_data, [{:state_timeout, :infinity, :limit_sell}]}
+  def handle_event(:cast, :pause, state, data) do
+    Logger.info("Pausing with data:#{inspect data}, state:#{inspect state}")
+    {:keep_state, %{data | pause: true} [{:state_timeout, :infinity, :limit_sell}]}
   end
 
   def handle_event(:cast, {:set_amt, type, amt}, state, data) do
@@ -102,7 +102,7 @@ defmodule CfLuno.Statem do
       ) do
     {float_price, _rem_bin} = Float.parse(price)
     if length > @trade_delta do
-      {{:value, {old_price, _old_time}}, queue} = :queue.out(queue)
+      {{:value, {old_price, old_time}}, queue} = :queue.out(queue)
       new_queue = :queue.in({float_price, time}, queue)
       transitions = case state do
         :wait_stable -> Transitions.wait_stable()
@@ -123,6 +123,10 @@ defmodule CfLuno.Statem do
       if next_state != state do
         Logger.warn("State change:#{inspect next_state}")
         Logger.info("old oracle price: #{inspect old_price}, new oracle price:#{inspect float_price}}")
+        {:ok, old_datetime} = DateTime.from_iso8601(old_time)
+        {:ok, datetime} = DateTime.from_iso8601(time)
+        seconds_diff = DateTime.diff(old_datetime, datetime)
+        Logger.info("Time between trades: #{inspect seconds_diff}")
         {:next_state, next_state, new_data, next_action}
       else
         {:next_state, next_state, new_data}
