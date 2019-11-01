@@ -73,7 +73,7 @@ defmodule CfLuno.Transitions do
         up_trend: {:quick_buy, @quick_limit_buy_action},
         down_trend: {:quick_sell, [@cancel_order_action, @quick_limit_sell_action]},
         positive: {:buy, @limit_buy_action},
-        negative: {:sell, @limit_sell_action}
+        negative: {:buy, @limit_buy_action}
       },
       only_btc:
       %{

@@ -5,8 +5,8 @@ defmodule CfLuno.Statem do
   alias CfLuno.Transitions, as: Transitions
   import String, only: [to_float: 1]
 
-  @dt_perc 0.0015
-  @ut_perc 0.0015
+  @dt_perc 0.002
+  @ut_perc 0.002
   @stable_perc 0.0005
   @min_btc_order_vol 0.0005
 
@@ -121,7 +121,7 @@ defmodule CfLuno.Statem do
       new_data = %{data | oracle_queue: {new_queue, length}}
       if next_state != state do
         Logger.warn("State change:#{inspect next_state}")
-        Logger.info("old oracle price: #{inspect old_price}, new oracle price:#{inspect float_price}}")
+        Logger.info("old oracle price: #{inspect old_price}, new oracle price:#{inspect float_price}")
         {:ok, old_datetime, _} = DateTime.from_iso8601(old_time)
         {:ok, datetime, _} = DateTime.from_iso8601(time)
         seconds_diff = DateTime.diff(datetime, old_datetime)
@@ -236,16 +236,12 @@ defmodule CfLuno.Statem do
     {:ok, [float_price, time]}
   end
 
-  defp get_luno_price(type) do
-    {:ok, %{^type => price}} = CfLuno.Api.get_ticker("XBTZAR")
-    Logger.info("Luno " <> type <> " price:" <> price)
-    {int_price, _rem_bin} = Integer.parse(price)
-    int_price
-  end
-
   defp get_bal(asset) do
-    {:ok, %{"balance" => [%{"balance" => avail_bal, "unconfirmed" => unconf_bal}]}} = CfLuno.Api.balance(asset)
-    to_float(avail_bal) + to_float(unconf_bal)
+    {
+      :ok,
+      %{"balance" => [%{"balance" => avail_bal, "unconfirmed" => unconf_bal, "reserved" => reserved}]}
+    } = CfLuno.Api.balance(asset)
+    to_float(avail_bal) + to_float(unconf_bal) - to_float(reserved)
   end
 
   defp check_delta(old_price, curr_price, transitions) do
@@ -282,17 +278,21 @@ defmodule CfLuno.Statem do
   end
 
   defp calc_limit_order_price(0, _curr_limit_price, _curr_limit_vol, type) do
-    price = String.slice(type, 0..-2)
-            |> get_luno_price()
-    {:ok, calc_best_price(price, price, type)}
+    {:ok, %{"bid" => bid, "ask" => ask}} = CfLuno.Api.get_ticker("XBTZAR")
+    Logger.info("Luno bid price:" <> bid <> " ask price:" <> ask)
+    {bid_int, _rem_bin} = Integer.parse(bid)
+    {ask_int, _rem_bin} = Integer.parse(ask)
+    if type == "asks" do
+      {:ok, calc_best_price(ask_int, ask_int, bid_int, type)}
+    else
+      {:ok, calc_best_price(bid_int, bid_int, ask_int, type)}
+    end
   end
   defp calc_limit_order_price(before_limit_vol, curr_price, curr_vol, type) do
-    {:ok, %{^type => orders}} = CfLuno.Api.get_orderbook_top("XBTZAR")
-    %{"price" => best_order_price, "volume" => best_order_volume} = hd(orders)
-    {best_price_int, _} = Integer.parse(best_order_price)
-    Logger.info("Best price:" <> best_order_price <> ", volume:" <> best_order_volume)
+    {:ok, %{"asks" => asks, "bids" => bids}} = CfLuno.Api.get_orderbook_top("XBTZAR")
+    {type_orders, alt_orders} = if type == "asks", do: {asks, bids}, else: {bids, asks}
     Enum.reduce_while(
-      orders,
+      type_orders,
       {0, curr_vol},
       fn (order, {acc_volume, curr_vol}) ->
         volume = to_float(order["volume"])
@@ -306,7 +306,14 @@ defmodule CfLuno.Statem do
             {new_acc_volume, curr_vol}
           end
         if new_acc_volume > before_limit_vol do
-          new_price = calc_best_price(best_price_int, price, type)
+          %{"price" => best_price, "volume" => best_vol} = hd(type_orders)
+          %{"price" => best_alt_price, "volume" => best_alt_vol} = hd(alt_orders)
+          Logger.info(
+            "Best price:" <> best_price <> ", volume:" <> best_vol
+            <> ". Best alt price:" <> best_alt_price <> ", volume:" <> best_alt_vol)
+          {best_price_int, _} = Integer.parse(best_price)
+          {best_alt_price_int, _} = Integer.parse(best_alt_price)
+          new_price = calc_best_price(best_price_int, price, best_alt_price_int, type)
           {:halt, {:ok, new_price}}
         else
           {:cont, {new_acc_volume, rem_limit_vol}}
@@ -315,19 +322,17 @@ defmodule CfLuno.Statem do
     )
   end
 
-  defp calc_best_price(lowest_ask, lowest_ask, "asks") do
-    bid_price = get_luno_price("bid")
-    max(bid_price + 1, lowest_ask - 1)
+  defp calc_best_price(ask_price, ask_price, bid_price, "asks") do
+    max(bid_price + 1, ask_price - 1)
   end
-  defp calc_best_price(lowest_ask, ask_price, "asks") do
-    max(lowest_ask + 1, ask_price) - 1
+  defp calc_best_price(ask_price, order_price, _, "asks") do
+    max(ask_price + 1, order_price) - 1
   end
-  defp calc_best_price(lowest_bid, lowest_bid, "bids") do
-    ask_price = get_luno_price("ask")
-    min(ask_price - 1, lowest_bid + 1)
+  defp calc_best_price(bid_price, bid_price, ask_price, "bids") do
+    min(ask_price - 1, bid_price + 1)
   end
-  defp calc_best_price(lowest_bid, bid_price, "bids") do
-    min(lowest_bid - 1, bid_price) + 1
+  defp calc_best_price(bid_price, order_price, _, "bids") do
+    min(bid_price - 1, order_price) + 1
   end
 
   defp process_limit_order(old_price, old_vol, order_id, old_timestamp, new_price, sell_amt, hodl_amt, bal, data, type)
