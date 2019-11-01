@@ -5,15 +5,14 @@ defmodule CfLuno.Statem do
   alias CfLuno.Transitions, as: Transitions
   import String, only: [to_float: 1]
 
-  @dt_perc 0.001
-  @ut_perc 0.001
+  @dt_perc 0.0015
+  @ut_perc 0.0015
   @stable_perc 0.0005
   @min_btc_order_vol 0.0005
   @min_zar_order_vol 100
 
-
-  @start_delta_time 30000
-  @review_time 5000
+  @review_time 3000
+  @trade_delta 50
 
   #---------------------------------------------------------------------------------------------------------------------
   # api
@@ -75,23 +74,18 @@ defmodule CfLuno.Statem do
     init_data = %{oracle_price: oracle_price, oracle_queue: {queue, 1}}
     Logger.info("Init data:#{inspect init_data}")
     new_data = Map.merge(data, init_data)
-    {:ok, :wait_stable, new_data, {{:timeout, :check_oracle_price}, @start_delta_time, :check_oracle_price}}
+    {:ok, :wait_stable, new_data}
   end
 
   def handle_event(:cast, :pause, state, %{btc_sell_amt: btc_vol}) do
     Logger.info("Pausing with btc_sell amount:#{inspect btc_vol}, state:#{inspect state}")
-    {
-      :keep_state_and_data,
-      [
-        {{:timeout, :check_oracle_price}, :infinity, :check_oracle_price},
-        {:state_timeout, :infinity, :limit_sell}
-      ]
-    }
+    {:keep_state_and_data, [{:state_timeout, :infinity, :limit_sell}]}
   end
 
   def handle_event(:cast, {:set_amt, type, amt}, state, data) do
     Logger.info("Set #{inspect type} amount:#{inspect amt}, state:#{inspect state}")
     new_data = %{data | type => amt}
+    Logger.info("New data #{inspect data}")
     :ok = :dets.insert(:disk_storage, {:data, new_data})
     {:keep_state, new_data}
   end
@@ -100,45 +94,45 @@ defmodule CfLuno.Statem do
         :cast,
         {:oracle_update, %{"price" => price, "time" => time}},
         state,
-        %{oracle_queue: {queue, length}} = data
+        %{
+          oracle_queue: {queue, length},
+          btc_sell_amt: btc_sell_amt,
+          zar_sell_amt: zar_sell_amt
+        } = data
       ) do
-    if length > 100 do
-      {{value, {old_price, old_time}}, queue} = :queue.out(queue)
-      new_queue = :queue.in({price, time}, queue)
+    {float_price, _rem_bin} = Float.parse(price)
+    if length > @trade_delta do
+      {{:value, {old_price, _old_time}}, queue} = :queue.out(queue)
+      new_queue = :queue.in({float_price, time}, queue)
       transitions = case state do
         :wait_stable -> Transitions.wait_stable()
         state when state == :sell or state == :quick_sell -> Transitions.sell()
         state when state == :buy or state == :quick_buy -> Transitions.buy()
       end
-      {next_state, next_action} = check_delta(old_price, price, transitions)
+      {next_state, next_action} =
+        cond do
+          btc_sell_amt > 0 and zar_sell_amt > 0 ->
+            check_delta(old_price, float_price, transitions[:btc_and_zar])
+          btc_sell_amt > 0 ->
+            check_delta(old_price, float_price, transitions[:only_btc])
+          zar_sell_amt > 0 ->
+            check_delta(old_price, float_price, transitions[:only_zar])
+          true -> {state, []}
+        end
       new_data = %{data | oracle_queue: {new_queue, length}}
-      IO.inspect(new_data)
-      {:next_state, next_state, new_data, next_action}
+      if next_state != state do
+        Logger.warn("State change:#{inspect next_state}")
+        Logger.info("old oracle price: #{inspect old_price}, new oracle price:#{inspect float_price}}")
+        {:next_state, next_state, new_data, next_action}
+      else
+        {:next_state, next_state, new_data}
+      end
+
     else
-      new_queue = :queue.in({price, time}, queue)
+      new_queue = :queue.in({float_price, time}, queue)
       new_data = %{data | oracle_queue: {new_queue, length + 1}}
-      IO.inspect(new_data)
       {:keep_state, new_data}
     end
-  end
-
-  def handle_event(event_type, :check_oracle_price, state, %{oracle_price: old_oracle_price} = data)
-      when event_type == {:timeout, :check_oracle_price} or event_type == :cast do
-   oracle_price = get_oracle_price()
-    new_data = %{data | oracle_price: oracle_price}
-    mode = cond do
-      btc_sell_amt > 0 and zar_sell_amt > 0 -> :btc_and_zar
-      btc_sell_amt > 0 -> :btc_only
-      zar_sell_amt > 0 -> :zar_only
-    end
-    transitions = case state do
-      :wait_stable -> Transitions.wait_stable()[mode]
-      state when state == :sell or state == :quick_sell -> Transitions.sell()[mode]
-      state when state == :buy or state == :quick_buy -> Transitions.buy()[mode]
-    end
-    {next_state, next_action} = check_delta(old_oracle_price, oracle_price, transitions)
-    Logger.info("CB price:#{inspect oracle_price}, next_state:#{inspect next_state}")
-    {:next_state, next_state, new_data, next_action}
   end
 
   def handle_event(
@@ -175,7 +169,7 @@ defmodule CfLuno.Statem do
         event_type,
         {:limit_buy, post_actions},
         :buy,
-        %{zar_buy_amt: buy_amt, zar_hodl_amt: hodl_amt, last_order_time: order_time} = data
+        %{zar_sell_amt: buy_amt, zar_hodl_amt: hodl_amt, last_order_time: order_time} = data
       )
       when buy_amt >= @min_zar_order_vol and (event_type == :internal or event_type == :state_timeout)  do
     {:ok, %{"orders" => orders}} = CfLuno.Api.list_orders("XBTZAR", "PENDING")
@@ -190,7 +184,7 @@ defmodule CfLuno.Statem do
         event_type,
         {:limit_buy, post_actions},
         :quick_buy,
-        %{zar_buy_amt: buy_amt, zar_hodl_amt: hodl_amt, last_order_time: order_time} = data
+        %{zar_sell_amt: buy_amt, zar_hodl_amt: hodl_amt, last_order_time: order_time} = data
       )
       when buy_amt >= @min_zar_order_vol and (event_type == :internal or event_type == :state_timeout)  do
     {:ok, %{"orders" => orders}} = CfLuno.Api.list_orders("XBTZAR", "PENDING")
@@ -221,7 +215,7 @@ defmodule CfLuno.Statem do
 
   def handle_event(event_type, event_content, state, data) do
     Logger.warn("Unhandled event:#{inspect [type: event_type, content: event_content, state: state, data: data]}")
-    {:keep_state_and_data, {{:timeout, :check_oracle_price}, @start_delta_time, :check_oracle_price}}
+    :keep_state_and_data
   end
 
   def terminate(_reason, _state, _data) do
@@ -252,7 +246,6 @@ defmodule CfLuno.Statem do
 
   defp check_delta(old_price, curr_price, transitions) do
     delta_perc = (curr_price - old_price) / old_price
-    Logger.info("Delta perc:#{inspect Float.round(delta_perc, 6)}")
     case delta_perc do
       change_perc when abs(change_perc) < @stable_perc -> transitions.stable
       change_perc when change_perc > @ut_perc -> transitions.up_trend
