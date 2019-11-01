@@ -72,8 +72,8 @@ defmodule CfLuno.Statem do
     queue = :queue.new
     queue = :queue.in({oracle_price, time}, queue)
     init_data = %{oracle_price: oracle_price, oracle_queue: {queue, 1}, pause: false}
-    Logger.info("Init data:#{inspect init_data}")
     new_data = Map.merge(data, init_data)
+    Logger.info("Init data:#{inspect new_data}")
     {:ok, :wait_stable, new_data}
   end
 
@@ -123,9 +123,9 @@ defmodule CfLuno.Statem do
       if next_state != state do
         Logger.warn("State change:#{inspect next_state}")
         Logger.info("old oracle price: #{inspect old_price}, new oracle price:#{inspect float_price}}")
-        {:ok, old_datetime} = DateTime.from_iso8601(old_time)
-        {:ok, datetime} = DateTime.from_iso8601(time)
-        seconds_diff = DateTime.diff(old_datetime, datetime)
+        {:ok, old_datetime, _} = DateTime.from_iso8601(old_time)
+        {:ok, datetime, _} = DateTime.from_iso8601(time)
+        seconds_diff = DateTime.diff(datetime, old_datetime)
         Logger.info("Time between trades: #{inspect seconds_diff}")
         {:next_state, next_state, new_data, next_action}
       else
