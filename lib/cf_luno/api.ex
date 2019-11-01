@@ -39,8 +39,7 @@ defmodule CfLuno.Api do
     Logger.info("Mock Limit " <> type <> " for " <> vol_str <> " at " <> price_str)
     path = "/postorder?pair=" <> pair <> "&type=" <> type <> "&volume=" <> vol_str <> "&price=" <> price_str <> "&post_only=" <> post_only
     Logger.debug("private api v1 post url: #{inspect path}")
-    timestamp = :erlang.system_time(:millisecond)
-    {:ok, %{"order_id" => "TestOrderID", "timestamp" => timestamp}}
+    {:ok, %{"order_id" => "TestOrderID"}}
   end
 
   def post_order(pair, type, volume, price, post_only) do
@@ -51,7 +50,6 @@ defmodule CfLuno.Api do
     {:ok, body} =
     "/postorder?pair=" <> pair <> "&type=" <> type <> "&volume=" <> vol_str <> "&price=" <> price_str <> "&post_only=" <> post_only
     |> invoke_private_api_v1_post()
-    Map.put(body, "timestamp", timestamp)
   end
 
   def stop_order(order_id), do: stop_order(order_id, "unknown")

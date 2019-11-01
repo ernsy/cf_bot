@@ -1,14 +1,6 @@
 defmodule CfLuno.Transitions do
   @moduledoc false
 
-  @short_stable_delta_time 15000
-  @long_stable_delta_time 30000
-  @unstable_delta_time 60000
-
-  @short_stable_timeout_action {{:timeout, :check_oracle_price}, @short_stable_delta_time, :check_oracle_price}
-  @long_stable_timeout_action {{:timeout, :check_oracle_price}, @long_stable_delta_time, :check_oracle_price}
-  @unstable_timeout_action {{:timeout, :check_oracle_price}, @unstable_delta_time, :check_oracle_price}
-
   @quick_limit_sell_action {:next_event, :internal, {:limit_sell, []}}
   @quick_limit_buy_action {:next_event, :internal, {:limit_buy, []}}
   @limit_sell_action {:next_event, :internal, {:limit_sell, []}}
@@ -81,7 +73,7 @@ defmodule CfLuno.Transitions do
         up_trend: {:quick_buy, @quick_limit_buy_action},
         down_trend: {:quick_sell, [@cancel_order_action, @quick_limit_sell_action]},
         positive: {:buy, @limit_buy_action},
-        negative: {:buy, @limit_sell_action}
+        negative: {:sell, @limit_sell_action}
       },
       only_btc:
       %{
