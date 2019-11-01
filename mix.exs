@@ -28,7 +28,8 @@ defmodule CfLuno.MixProject do
       {:gen_state_machine, "~> 2.0"},
       {:jason, "~> 1.1"},
       {:httpoison, "~> 1.6"},
-      {:logger_file_backend, "~> 0.0.11"}
+      {:logger_file_backend, "~> 0.0.11"},
+      {:websockex, "~> 0.4.2"}
     ]
   end
 end
