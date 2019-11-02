@@ -2,11 +2,10 @@ defmodule CfLuno.Statem do
   require Logger
 
   use GenStateMachine
-  alias CfLuno.Transitions, as: Transitions
   import String, only: [to_float: 1]
 
-  @dt_perc 0.002
-  @ut_perc 0.002
+  @dt_perc 0.0015
+  @ut_perc 0.0015
   @stable_perc 0.0005
   @min_btc_order_vol 0.0005
 
@@ -103,19 +102,12 @@ defmodule CfLuno.Statem do
     if length > @trade_delta do
       {{:value, {old_price, old_time}}, queue} = :queue.out(queue)
       new_queue = :queue.in({float_price, time}, queue)
-      transitions = case state do
-        :wait_stable -> Transitions.wait_stable()
-        state when state == :sell or state == :quick_sell -> Transitions.sell()
-        state when state == :buy or state == :quick_buy -> Transitions.buy()
-      end
+      transitions = apply(CfLuno.Transitions,state,[])
       {next_state, next_action} =
         cond do
-          btc_sell_amt > 0 and btc_buy_amt > 0 ->
-            check_delta(old_price, float_price, transitions[:btc_and_zar])
-          btc_sell_amt > 0 ->
-            check_delta(old_price, float_price, transitions[:only_btc])
-          btc_buy_amt > 0 ->
-            check_delta(old_price, float_price, transitions[:only_zar])
+          btc_sell_amt > 0 and btc_buy_amt > 0 -> check_delta(old_price, float_price, transitions[:bid_or_ask])
+          btc_sell_amt > 0 -> check_delta(old_price, float_price, transitions[:ask])
+          btc_buy_amt > 0 -> check_delta(old_price, float_price, transitions[:bid])
           true -> {state, []}
         end
       new_data = %{data | oracle_queue: {new_queue, length}}
