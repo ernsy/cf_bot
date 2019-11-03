@@ -9,7 +9,7 @@ defmodule CfLuno.Transitions do
     %{
       bid_or_ask:
       %{
-        stable: {:sell, @limit_sell_action},
+        stable: {:wait_stable, []},
         up_trend: {:quick_buy, @limit_buy_action},
         down_trend: {:quick_sell, @limit_sell_action},
         positive: {:wait_stable, []},
@@ -54,11 +54,11 @@ defmodule CfLuno.Transitions do
       },
       bid:
       %{
-        stable: {:wait_stable, []},
+        stable: {:sell, []},
         up_trend: {:quick_buy, [@cancel_order_action, @limit_buy_action]},
-        down_trend: {:wait_stable, []},
-        positive: {:wait_stable, []},
-        negative: {:wait_stable, []}
+        down_trend: {:sell, []},
+        positive: {:sell, []},
+        negative: {:sell, []}
       }
     }
   end
@@ -83,11 +83,11 @@ defmodule CfLuno.Transitions do
       },
       bid:
       %{
-        stable: {:wait_stable, []},
+        stable: {:sell, []},
         up_trend: {:quick_buy, [@cancel_order_action, @limit_buy_action]},
-        down_trend: {:wait_stable, []},
-        positive: {:wait_stable, []},
-        negative: {:wait_stable, []}
+        down_trend: {:sell, []},
+        positive: {:sell, []},
+        negative: {:sell, []}
       }
     }
   end
@@ -104,11 +104,11 @@ defmodule CfLuno.Transitions do
       },
       ask:
       %{
-        stable: {:wait_stable, []},
-        up_trend: {:wait_stable, []},
+        stable: {:buy, []},
+        up_trend: {:buy, []},
         down_trend: {:quick_sell, [@cancel_order_action, @limit_sell_action]},
-        positive: {:wait_stable, []},
-        negative: {:wait_stable, []}
+        positive: {:buy, []},
+        negative: {:buy, []}
       },
       bid:
       %{
@@ -133,11 +133,11 @@ defmodule CfLuno.Transitions do
       },
       ask:
       %{
-        stable: {:wait_stable, []},
-        up_trend: {:wait_stable, []},
+        stable: {:buy, []},
+        up_trend: {:buy, []},
         down_trend: {:quick_sell, [@cancel_order_action, @limit_sell_action]},
-        positive: {:wait_stable, []},
-        negative: {:wait_stable, []}
+        positive: {:buy, []},
+        negative: {:buy, []}
       },
       bid:
       %{
