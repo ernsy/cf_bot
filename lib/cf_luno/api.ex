@@ -67,12 +67,10 @@ defmodule CfLuno.Api do
     {:ok, %{"success" => true}}
   end
 
-
-  def list_trades(params) when is_list(params) do
-    query_str = URI.encode_query(params)
-    "/listtrades?" <> query_str
+  def list_trades(_params) do
     {:ok, %{"trades" => [%{"type" => "ASK", "volume" => "0.0005"},%{"type" => "BID", "volume" => "0.0005"}]}}
   end
+
   def list_trades(params) do
     query_str = URI.encode_query(params)
     "/listtrades?" <> query_str
