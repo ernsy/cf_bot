@@ -67,7 +67,7 @@ defmodule CfLuno.Api do
   end
 
   def list_trades(_params) do
-    {:ok, %{"trades" => [%{"type" => "ASK", "volume" => "0.0005"}]}}
+    {:ok, %{"trades" => [%{"type" => "ASK", "volume" => "0.0005"},%{"type" => "BID", "volume" => "0.0005"}]}}
   end
 
   def list_trades(params) do
