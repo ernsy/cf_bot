@@ -21,12 +21,12 @@ defmodule CfLuno.Statem do
     GenStateMachine.start_link(__MODULE__, init_data, name: __MODULE__)
   end
 
-  def check_oracle_price() do
-    GenStateMachine.cast(__MODULE__, :check_oracle_price)
-  end
-
   def pause() do
     GenStateMachine.cast(__MODULE__, :pause)
+  end
+
+  def resume() do
+    GenStateMachine.cast(__MODULE__, {:resume, :limit_sell})
   end
 
   def set_sell_amt(amount) when is_float(amount) do
@@ -81,6 +81,11 @@ defmodule CfLuno.Statem do
   def handle_event(:cast, :pause, state, data) do
     Logger.info("Pausing with data:#{inspect data}, state:#{inspect state}")
     {:keep_state, %{data | pause: true} [{:state_timeout, :infinity, :limit_sell}]}
+  end
+
+  def handle_event(:cast, {:resume, action}, state, data) do
+    Logger.info("Pausing with data:#{inspect data}, state:#{inspect state}")
+    {:keep_state, %{data | pause: false} [{:state_timeout, 0, action}]}
   end
 
   def handle_event(:cast, {:set_amt, type, amt}, state, data) do
