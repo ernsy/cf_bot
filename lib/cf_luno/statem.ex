@@ -309,7 +309,7 @@ defmodule CfLuno.Statem do
     traded_vol = get_traded_volume_since(trades, type)
     rem_vol = max(new_vol - traded_vol, 0)
     timestamp = :erlang.system_time(:millisecond)
-    Logger.info("Keep Limit order #{inspect order_id} remaining volume #{inspect rem_vol} at #{inspect old_price}")
+    Logger.info("Limit order #{inspect order_id} remaining volume #{inspect rem_vol} at #{inspect old_price}")
     {:ok, [timestamp, rem_vol, order_id]}
   end
   defp place_limit_order(
