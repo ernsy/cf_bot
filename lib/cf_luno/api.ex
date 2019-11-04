@@ -46,8 +46,6 @@ defmodule CfLuno.Api do
     vol_str = :erlang.float_to_binary(volume, [{:decimals, 6}])
     price_str = to_string(price)
     Logger.info("Limit " <> type <> "for " <> vol_str <> " at " <> price_str)
-    timestamp = :erlang.system_time(:millisecond)
-    {:ok, body} =
     "/postorder?pair=" <> pair <> "&type=" <> type <> "&volume=" <> vol_str <> "&price=" <> price_str <> "&post_only=" <> post_only
     |> invoke_private_api_v1_post()
   end
@@ -59,10 +57,17 @@ defmodule CfLuno.Api do
     Logger.debug("private api v1 post url: #{inspect path}")
     {:ok, %{"success" => true}}
   end
+  def stop_order(0, _price) do
+    {:ok, %{"success" => true}}
+  end
   def stop_order(order_id, price) do
     Logger.info("Cancel limit order #{inspect order_id} at #{inspect price}")
     "/stoporder?order_id=" <> order_id
     |> invoke_private_api_v1_post()
+  end
+
+  def list_trades(_params) do
+    {:ok, %{"trades" => [%{"type" => "ASK", "volume" => "0.0005"}]}}
   end
 
   def list_trades(params) do
