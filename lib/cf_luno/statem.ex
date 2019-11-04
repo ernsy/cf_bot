@@ -110,9 +110,9 @@ defmodule CfLuno.Statem do
       transitions = apply(CfLuno.Transitions, state, [])
       {next_state, next_action} =
         cond do
-          btc_sell_amt > 0 and btc_buy_amt > 0 -> check_delta(old_price, float_price, transitions[:bid_or_ask])
-          btc_sell_amt > 0 -> check_delta(old_price, float_price, transitions[:ask])
-          btc_buy_amt > 0 -> check_delta(old_price, float_price, transitions[:bid])
+          btc_sell_amt > 0 and btc_buy_amt > 0 -> check_delta(old_price, float_price, transitions[:buy_or_sell])
+          btc_sell_amt > 0 -> check_delta(old_price, float_price, transitions[:sell])
+          btc_buy_amt > 0 -> check_delta(old_price, float_price, transitions[:buy])
           true -> {state, []}
         end
       new_data = %{data | oracle_queue: {queue, length}}

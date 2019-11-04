@@ -7,7 +7,7 @@ defmodule CfLuno.Transitions do
 
   def wait_stable() do
     %{
-      bid_or_ask:
+      buy_or_sell:
       %{
         stable: {:wait_stable, []},
         up_trend: {:quick_buy, @limit_buy_action},
@@ -15,7 +15,7 @@ defmodule CfLuno.Transitions do
         positive: {:wait_stable, []},
         negative: {:wait_stable, []}
       },
-      ask:
+      sell:
       %{
         stable: {:sell, @limit_sell_action},
         up_trend: {:wait_stable, []},
@@ -23,7 +23,7 @@ defmodule CfLuno.Transitions do
         positive: {:wait_stable, []},
         negative: {:wait_stable, []}
       },
-      bid:
+      buy:
       %{
         stable: {:buy, @limit_buy_action},
         up_trend: {:quick_buy, @limit_buy_action},
@@ -36,7 +36,7 @@ defmodule CfLuno.Transitions do
 
   def sell() do
     %{
-      bid_or_ask:
+      buy_or_sell:
       %{
         stable: {:sell, @limit_sell_action},
         up_trend: {:quick_buy, [@cancel_order_action, @limit_buy_action]},
@@ -44,7 +44,7 @@ defmodule CfLuno.Transitions do
         positive: {:sell, @limit_sell_action},
         negative: {:sell, @limit_sell_action}
       },
-      ask:
+      sell:
       %{
         stable: {:sell, @limit_sell_action},
         up_trend: {:wait_stable, [@cancel_order_action]},
@@ -52,12 +52,12 @@ defmodule CfLuno.Transitions do
         positive: {:sell, @limit_sell_action},
         negative: {:sell, @limit_sell_action}
       },
-      bid:
+      buy:
       %{
         stable: {:sell, []},
-        up_trend: {:quick_buy, [@cancel_order_action, @limit_buy_action]},
-        down_trend: {:sell, []},
-        positive: {:sell, []},
+        up_trend: {:quick_buy, @limit_buy_action},
+        down_trend: {:quick_sell, []},
+        positive: {:buy, @limit_buy_action},
         negative: {:sell, []}
       }
     }
@@ -65,7 +65,7 @@ defmodule CfLuno.Transitions do
 
     def quick_sell() do
     %{
-      bid_or_ask:
+      buy_or_sell:
       %{
         stable: {:sell, @limit_sell_action},
         up_trend: {:quick_buy, [@cancel_order_action, @limit_buy_action]},
@@ -73,28 +73,28 @@ defmodule CfLuno.Transitions do
         positive: {:sell, @limit_sell_action},
         negative: {:quick_sell, @limit_sell_action}
       },
-      ask:
+      sell:
       %{
         stable: {:sell, @limit_sell_action},
-        up_trend: {:wait_stable, [@cancel_order_action]},
+        up_trend: {:wait_stable, @cancel_order_action},
         down_trend: {:quick_sell, @limit_sell_action},
         positive: {:sell, @limit_sell_action},
         negative: {:quick_sell, @limit_sell_action}
       },
-      bid:
+      buy:
       %{
         stable: {:sell, []},
-        up_trend: {:quick_buy, [@cancel_order_action, @limit_buy_action]},
-        down_trend: {:sell, []},
-        positive: {:sell, []},
-        negative: {:sell, []}
+        up_trend: {:quick_buy, @limit_buy_action},
+        down_trend: {:quick_sell, []},
+        positive: {:buy, @limit_buy_action},
+        negative: {:quick_sell, []}
       }
     }
   end
 
   def buy() do
     %{
-      bid_or_ask:
+      buy_or_sell:
       %{
         stable: {:buy, @limit_buy_action},
         up_trend: {:quick_buy, @limit_buy_action},
@@ -102,19 +102,19 @@ defmodule CfLuno.Transitions do
         positive: {:buy, @limit_buy_action},
         negative: {:buy, @limit_buy_action}
       },
-      ask:
+      sell:
       %{
         stable: {:buy, []},
-        up_trend: {:buy, []},
-        down_trend: {:quick_sell, [@cancel_order_action, @limit_sell_action]},
+        up_trend: {:quick_buy, []},
+        down_trend: {:quick_sell, @limit_sell_action},
         positive: {:buy, []},
-        negative: {:buy, []}
+        negative: {:sell, @limit_sell_action}
       },
-      bid:
+      buy:
       %{
         stable: {:buy, @limit_buy_action},
         up_trend: {:quick_buy, @limit_buy_action},
-        down_trend: {:wait_stable, [@cancel_order_action]},
+        down_trend: {:wait_stable, @cancel_order_action},
         positive: {:buy, @limit_buy_action},
         negative: {:buy, @limit_buy_action}
       }
@@ -123,7 +123,7 @@ defmodule CfLuno.Transitions do
 
     def quick_buy() do
     %{
-      bid_or_ask:
+      buy_or_sell:
       %{
         stable: {:buy, @limit_buy_action},
         up_trend: {:quick_buy, @limit_buy_action},
@@ -131,19 +131,19 @@ defmodule CfLuno.Transitions do
         positive: {:quick_buy, @limit_buy_action},
         negative: {:buy, @limit_buy_action}
       },
-      ask:
+      sell:
       %{
         stable: {:buy, []},
-        up_trend: {:buy, []},
-        down_trend: {:quick_sell, [@cancel_order_action, @limit_sell_action]},
-        positive: {:buy, []},
-        negative: {:buy, []}
+        up_trend: {:quick_buy, []},
+        down_trend: {:quick_sell, @limit_sell_action},
+        positive: {:quick_buy, []},
+        negative: {:sell, @limit_sell_action}
       },
-      bid:
+      buy:
       %{
         stable: {:buy, @limit_buy_action},
         up_trend: {:quick_buy, @limit_buy_action},
-        down_trend: {:wait_stable, [@cancel_order_action]},
+        down_trend: {:wait_stable, @cancel_order_action},
         positive: {:quick_buy, @limit_buy_action},
         negative: {:buy, @limit_buy_action}
       }
