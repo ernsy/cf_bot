@@ -4,12 +4,12 @@ defmodule CfLuno.Statem do
   use GenStateMachine
   import String, only: [to_float: 1]
 
-  @dt_perc 0.002
-  @ut_perc 0.002
+  @dt_perc 0.0025
+  @ut_perc 0.0025
   @stable_perc 0.0002
   @min_btc_order_vol 0.0005
 
-  @review_time 3000
+  @review_time 2000
   @trade_delta_sec 60
 
   #---------------------------------------------------------------------------------------------------------------------
@@ -248,7 +248,7 @@ defmodule CfLuno.Statem do
     Logger.info("Luno bid price:" <> bid <> " ask price:" <> ask)
     {bid_int, _rem_bin} = Integer.parse(bid)
     {ask_int, _rem_bin} = Integer.parse(ask)
-    if type == "asks" do
+    if type == "ASK" do
       {:ok, calc_best_price(ask_int, ask_int, bid_int, type)}
     else
       {:ok, calc_best_price(bid_int, bid_int, ask_int, type)}
