@@ -57,7 +57,7 @@ defmodule CfLuno.Transitions do
         stable: {:sell, []},
         up_trend: {:quick_buy, @limit_buy_action},
         down_trend: {:quick_sell, []},
-        positive: {:buy, @limit_buy_action},
+        positive: {:sell,[]]},
         negative: {:sell, []}
       }
     }
@@ -86,7 +86,7 @@ defmodule CfLuno.Transitions do
         stable: {:sell, []},
         up_trend: {:quick_buy, @limit_buy_action},
         down_trend: {:quick_sell, []},
-        positive: {:buy, @limit_buy_action},
+        positive: {:sell, []},
         negative: {:quick_sell, []}
       }
     }
@@ -108,7 +108,7 @@ defmodule CfLuno.Transitions do
         up_trend: {:quick_buy, []},
         down_trend: {:quick_sell, @limit_sell_action},
         positive: {:buy, []},
-        negative: {:sell, @limit_sell_action}
+        negative: {:buy, []}
       },
       buy:
       %{
@@ -137,7 +137,7 @@ defmodule CfLuno.Transitions do
         up_trend: {:quick_buy, []},
         down_trend: {:quick_sell, @limit_sell_action},
         positive: {:quick_buy, []},
-        negative: {:sell, @limit_sell_action}
+        negative: {:buy, []}
       },
       buy:
       %{
