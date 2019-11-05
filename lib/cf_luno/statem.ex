@@ -2,7 +2,6 @@ defmodule CfLuno.Statem do
   require Logger
 
   use GenStateMachine
-  alias CfLuno.Transitions, as: Transitions
   import String, only: [to_float: 1]
 
   @dt_perc 0.002
@@ -11,7 +10,7 @@ defmodule CfLuno.Statem do
   @min_btc_order_vol 0.0005
 
   @review_time 3000
-  @trade_delta 50
+  @trade_delta_sec 60
 
   #---------------------------------------------------------------------------------------------------------------------
   # api
@@ -42,7 +41,7 @@ defmodule CfLuno.Statem do
       asset == "BTC" -> :btc_hodl_amt
       asset == "ZAR" -> :zar_hodl_amt
     end
-    GenStateMachine.cast(__MODULE__, {:set_amt, type, amount})
+    GenStateMachine.cast(__MODULE__, {:set_data, type, amount})
   end
 
   def oracle_update(msg) do
@@ -74,10 +73,9 @@ defmodule CfLuno.Statem do
           mode: "Manual"
         }
     end
-    {:ok, [oracle_price, time]} = get_oracle_price()
+    {:ok, [price, time]} = get_oracle_price()
     queue = :queue.new
-    queue = :queue.in({oracle_price, time}, queue)
-    init_data = %{oracle_queue: {queue, 1}, pause: false, order_id: 0, order_price: 0}
+    init_data = %{oracle_queue: {queue, 0}, oracle_ref: {price, time}, pause: false, order_id: 0, order_price: 0}
     new_data = Map.merge(data, init_data)
     Logger.info("Init data:#{inspect new_data}")
     {:ok, :wait_stable, new_data}
@@ -86,6 +84,11 @@ defmodule CfLuno.Statem do
   def handle_event(:cast, :pause, state, data) do
     Logger.info("Pausing with data:#{inspect data}, state:#{inspect state}")
     {:keep_state, %{data | pause: true} [{:state_timeout, :infinity, :limit_sell}]}
+  end
+
+  def handle_event(:cast, {:resume, action}, state, data) do
+    Logger.info("Pausing with data:#{inspect data}, state:#{inspect state}")
+    {:keep_state, %{data | pause: false}, [{:state_timeout, 0, {action, []}}]}
   end
 
   def handle_event(:cast, {:set_data, key, val}, state, data) do
@@ -102,14 +105,17 @@ defmodule CfLuno.Statem do
         state,
         %{
           oracle_queue: {queue, length},
+          oracle_ref: {old_price, old_datetime},
           btc_sell_amt: btc_sell_amt,
           btc_buy_amt: btc_buy_amt
         } = data
       ) do
     {float_price, _rem_bin} = Float.parse(price)
-    if length > @trade_delta do
-      {{:value, {old_price, old_time}}, queue} = :queue.out(queue)
-      queue = :queue.in({float_price, time}, queue)
+    {:ok, datetime, _} = DateTime.from_iso8601(time)
+    sec_diff = DateTime.diff(datetime, old_datetime)
+    if sec_diff > @trade_delta_sec do
+      {{:value, {old_q_price, old_q_datetime}}, queue} = :queue.out(queue)
+      queue = :queue.in({float_price, datetime}, queue)
       transitions = apply(CfLuno.Transitions, state, [])
       {next_state, next_action} =
         cond do
@@ -118,21 +124,18 @@ defmodule CfLuno.Statem do
           btc_buy_amt > 0 -> check_delta(old_price, float_price, transitions[:buy])
           true -> {state, []}
         end
-      new_data = %{data | oracle_queue: {queue, length}}
+      new_data = %{data | oracle_queue: {queue, length}, oracle_ref: {old_q_price, old_q_datetime}}
       if next_state != state do
         Logger.warn("State change:#{inspect next_state}")
         Logger.info("old oracle price: #{inspect old_price}, new oracle price:#{inspect float_price}")
-        {:ok, old_datetime, _} = DateTime.from_iso8601(old_time)
-        {:ok, datetime, _} = DateTime.from_iso8601(time)
-        seconds_diff = DateTime.diff(datetime, old_datetime)
-        Logger.info("Time between trades: #{inspect seconds_diff}")
+        Logger.info("Time between trades: #{inspect sec_diff}")
         {:next_state, next_state, new_data, next_action}
       else
         {:next_state, next_state, new_data}
       end
 
     else
-      new_queue = :queue.in({float_price, time}, queue)
+      new_queue = :queue.in({float_price, datetime}, queue)
       new_data = %{data | oracle_queue: {new_queue, length + 1}}
       {:keep_state, new_data}
     end
@@ -155,6 +158,7 @@ defmodule CfLuno.Statem do
       {:ok, new_price} = calc_limit_order_price(vol_before_order, old_price, order_vol, type)
       {:ok, [timestamp, rem_vol, alt_vol, new_order_id]} =
         place_limit_order(new_price, order_vol, alt_vol, hodl_amt, type, data)
+        rem_price = if rem_vol == 0, do: 0, else: new_price
       new_data =
         %{
           data |
@@ -162,7 +166,7 @@ defmodule CfLuno.Statem do
           vol_key => rem_vol,
           alt_vol_key => alt_vol,
           :order_id => new_order_id,
-          :order_price => new_price
+          :order_price => rem_price
         }
       :ok = :dets.insert(:disk_storage, {:data, new_data})
       {:keep_state, new_data, [{:state_timeout, @review_time, {action, []}} | post_actions]}
@@ -219,8 +223,9 @@ defmodule CfLuno.Statem do
 
   defp get_oracle_price() do
     {:ok, %{"price" => price, "time" => time}} = CfLuno.Api.get_cb_ticker("BTC-USD")
+    {:ok, datetime, _} = DateTime.from_iso8601(time)
     {float_price, _rem_bin} = Float.parse(price)
-    {:ok, [float_price, time]}
+    {:ok, [float_price, datetime]}
   end
 
   defp get_bal(asset) do
@@ -312,7 +317,6 @@ defmodule CfLuno.Statem do
          %{order_time: old_timestamp, order_price: old_price, order_id: order_id, mode: mode}
        )
        when old_price == new_price do
-    {:ok, %{"trades" => trades}} = CfLuno.Api.list_trades([pair: "XBTZAR", since: old_timestamp])
     [timestamp, rem_vol, alt_vol] = get_return_vlaues(old_timestamp, type, new_vol, alt_vol, mode)
     Logger.info("Limit order #{inspect order_id} remaining volume #{inspect rem_vol} at #{inspect old_price}")
     {:ok, [timestamp, rem_vol, alt_vol, order_id]}
@@ -325,8 +329,7 @@ defmodule CfLuno.Statem do
          type,
          %{order_time: old_timestamp, order_price: old_price, order_id: order_id, mode: mode}
        ) do
-    {:ok, %{"success" => true}} = CfLuno.Api.stop_order(order_id, old_price)
-    {:ok, %{"trades" => trades}} = CfLuno.Api.list_trades([pair: "XBTZAR", since: old_timestamp])
+    CfLuno.Api.stop_order(order_id, old_price)
     [timestamp, rem_vol, alt_vol] = get_return_vlaues(old_timestamp, type, new_vol, alt_vol, mode)
     bal = if type == "ASK", do: get_bal("XBT"), else: get_bal("ZAR")
     if bal > hodl_amt and rem_vol >= @min_btc_order_vol do
