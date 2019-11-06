@@ -25,7 +25,7 @@ defmodule CfLuno.Statem do
   end
 
   def resume() do
-    GenStateMachine.cast(__MODULE__, {:resume, :limit_sell})
+    GenStateMachine.cast(__MODULE__, {:resume, {:limit_sell, []}})
   end
 
   def set_sell_amt(amount) when is_float(amount) do
@@ -75,7 +75,13 @@ defmodule CfLuno.Statem do
     end
     {:ok, [oracle_price, datetime]} = get_oracle_price()
     queue = :queue.new
-    init_data = %{oracle_queue: {queue, 0}, oracle_ref: {oracle_price, datetime}, pause: false, order_id: 0, order_price: 0}
+    init_data = %{
+      oracle_queue: {queue, 0},
+      oracle_ref: {oracle_price, datetime},
+      pause: false,
+      order_id: 0,
+      order_price: 0
+    }
     new_data = Map.merge(data, init_data)
     Logger.info("Init data:#{inspect new_data}")
     {:ok, :wait_stable, new_data}
@@ -84,6 +90,11 @@ defmodule CfLuno.Statem do
   def handle_event(:cast, :pause, state, data) do
     Logger.info("Pausing with data:#{inspect data}, state:#{inspect state}")
     {:keep_state, %{data | pause: true} [{:state_timeout, :infinity, :limit_sell}]}
+  end
+
+  def handle_event(:cast, {:resume, action}, state, data) do
+    Logger.info("Pausing with data:#{inspect data}, state:#{inspect state}")
+    {:keep_state, %{data | pause: false} [{:state_timeout, 0, action}]}
   end
 
   def handle_event(:cast, {:set_data, key, val}, state, data) do
