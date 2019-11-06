@@ -356,7 +356,7 @@ defmodule CfLuno.Statem do
 
   defp get_traded_volume_since(nil, _type), do: 0
   defp get_traded_volume_since(trades, type) do
-    Enum.reduce(
+    vol = Enum.reduce(
       trades,
       0,
       fn
@@ -364,6 +364,8 @@ defmodule CfLuno.Statem do
         (_, vol_acc) -> vol_acc
       end
     )
+    Logger.info("Traded vol: #{inspect vol}")
+    vol
   end
 
   def cancel_orders(nil), do: :ok
