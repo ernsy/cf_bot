@@ -93,7 +93,7 @@ defmodule CfLuno.Statem do
   end
 
   def handle_event(:cast, {:resume, action}, state, data) do
-    Logger.info("Pausing with data:#{inspect data}, state:#{inspect state}")
+    Logger.info("Resuming with data:#{inspect data}, state:#{inspect state}")
     {:keep_state, %{data | pause: false}, [{:state_timeout, 0, action}]}
   end
 
