@@ -21,14 +21,14 @@ defmodule CfLuno.Transitions do
         up_trend: {:wait_stable, []},
         down_trend: {:quick_sell, @limit_sell_action},
         positive: {:wait_stable, []},
-        negative: {:sell, []}
+        negative: {:sell, @limit_sell_action}
       },
       buy:
       %{
         stable: {:buy, @limit_buy_action},
         up_trend: {:quick_buy, @limit_buy_action},
         down_trend: {:wait_stable, []},
-        positive: {:buy, []},
+        positive: {:buy, @limit_buy_action},
         negative: {:wait_stable, []}
       }
     }
