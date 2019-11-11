@@ -113,7 +113,9 @@ defmodule CfLuno.Statem do
           oracle_queue: {queue, length},
           btc_sell_amt: btc_sell_amt,
           btc_buy_amt: btc_buy_amt,
-          oracle_ref: {old_price, old_datetime}
+          btc_hodl_amt: btc_hodl_amt,
+          oracle_ref: {old_price, old_datetime},
+          mode: mode
         } = data
       ) do
     {float_price, _rem_bin} = Float.parse(price)
@@ -126,7 +128,7 @@ defmodule CfLuno.Statem do
       {next_state, next_action} =
         cond do
           btc_sell_amt > 0 and btc_buy_amt > 0 -> check_delta(old_price, float_price, transitions[:buy_or_sell])
-          btc_sell_amt > 0 -> check_delta(old_price, float_price, transitions[:sell])
+          btc_sell_amt > 0 or mode == "hodl" -> check_delta(old_price, float_price, transitions[:sell])
           btc_buy_amt > 0 -> check_delta(old_price, float_price, transitions[:buy])
           true -> {state, []}
         end
@@ -135,7 +137,8 @@ defmodule CfLuno.Statem do
         Logger.warn("State change:#{inspect next_state}")
         Logger.info("old oracle price: #{inspect old_price}, new oracle price:#{inspect float_price}")
         Logger.info("Time between trades: #{inspect seconds_diff}")
-        {:next_state, next_state, new_data, next_action}
+        new_btc_sell_amt = if mode == "hodl", do: get_bal("XBT") - btc_hodl_amt, else: btc_sell_amt
+        {:next_state, next_state, %{new_data | btc_sell_amt: new_btc_sell_amt}, next_action}
       else
         {:next_state, next_state, new_data}
       end
@@ -176,7 +179,7 @@ defmodule CfLuno.Statem do
       :ok = :dets.insert(:disk_storage, {:data, new_data})
       {:keep_state, new_data, [{:state_timeout, @review_time, {action, []}} | post_actions]}
     else
-      :keep_state_and_data
+      {:next_state, :wait_stable, data, []}
     end
 
   end
