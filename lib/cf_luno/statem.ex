@@ -180,7 +180,7 @@ defmodule CfLuno.Statem do
       :ok = :dets.insert(:disk_storage, {:data, new_data})
       {:keep_state, new_data, [{:state_timeout, @review_time, {action, []}} | post_actions]}
     else
-      {:next_state, :wait_stable, data, []}
+      {:next_state, :wait_stable, %{data | vol_key => 0}, []}
     end
 
   end
