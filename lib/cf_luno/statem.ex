@@ -137,7 +137,8 @@ defmodule CfLuno.Statem do
         Logger.warn("State change:#{inspect next_state}")
         Logger.info("old oracle price: #{inspect old_price}, new oracle price:#{inspect float_price}")
         Logger.info("Time between trades: #{inspect seconds_diff}")
-        new_btc_sell_amt = if mode == "hodl", do: get_bal("XBT") - btc_hodl_amt, else: btc_sell_amt
+        new_btc_sell_amt = if mode == "hodl" and btc_sell_amt == 0,
+                              do: get_bal("XBT") - btc_hodl_amt, else: btc_sell_amt
         {:next_state, next_state, %{new_data | btc_sell_amt: new_btc_sell_amt}, next_action}
       else
         {:next_state, next_state, new_data}
