@@ -56,8 +56,8 @@ defmodule CfLuno.Statem do
   # callbacks
   #---------------------------------------------------------------------------------------------------------------------
 
-  def init(_init_data) do
-    {:ok, %{"orders" => orders}} = CfLuno.Api.list_orders("XBTZAR", "PENDING")
+  def init([pair]) do
+    {:ok, %{"orders" => orders}} = CfLuno.Api.list_orders(pair, "PENDING")
     :ok = cancel_orders(orders)
     {:ok, :disk_storage} = :dets.open_file(:disk_storage, [type: :set])
     data = case :dets.lookup(:disk_storage, :data) do
@@ -80,7 +80,8 @@ defmodule CfLuno.Statem do
       oracle_ref: {oracle_price, datetime},
       pause: false,
       order_id: 0,
-      order_price: 0
+      order_price: 0,
+      pair: pair
     }
     new_data = Map.merge(data, init_data)
     Logger.info("Init data:#{inspect new_data}")
@@ -151,7 +152,7 @@ defmodule CfLuno.Statem do
     end
   end
 
-  def handle_event(event_type, {action, post_actions}, state, %{order_price: old_price} = data)
+  def handle_event(event_type, {action, post_actions}, state, data)
       when
         (event_type == :internal or event_type == :state_timeout) and (action == :limit_sell or action == :limit_buy) do
     [vol_key, alt_vol_key, hodl_amt_key, type] =
@@ -165,7 +166,7 @@ defmodule CfLuno.Statem do
       alt_vol = data[alt_vol_key]
       hodl_amt = data[hodl_amt_key]
       vol_before_order = if state == :quick_sell or state == :quick_buy, do: 0, else: order_vol
-      {:ok, new_price} = calc_limit_order_price(vol_before_order, old_price, order_vol, type)
+      {:ok, new_price} = calc_limit_order_price(vol_before_order, order_vol, type, data)
       {:ok, [timestamp, rem_vol, alt_vol, new_order_id]} =
         place_limit_order(new_price, order_vol, alt_vol, hodl_amt, type, data)
       new_data =
@@ -189,11 +190,11 @@ defmodule CfLuno.Statem do
         :internal,
         :cancel_orders,
         _state,
-        %{order_time: last_order_time, btc_sell_amt: btc_sell_amt, btc_buy_amt: btc_buy_amt} = data
+        %{order_time: last_order_time, btc_sell_amt: btc_sell_amt, btc_buy_amt: btc_buy_amt, pair: pair} = data
       ) do
-    {:ok, %{"orders" => orders}} = CfLuno.Api.list_orders("XBTZAR", "PENDING")
+    {:ok, %{"orders" => orders}} = CfLuno.Api.list_orders(pair, "PENDING")
     :ok = cancel_orders(orders)
-    {:ok, %{"trades" => trades}} = CfLuno.Api.list_trades([pair: "XBTZAR", since: last_order_time])
+    {:ok, %{"trades" => trades}} = CfLuno.Api.list_trades([pair: pair, since: last_order_time])
     vol_sold = get_traded_volume_since(trades, "ASK")
     vol_bought = get_traded_volume_since(trades, "BID")
     new_data =
@@ -243,7 +244,7 @@ defmodule CfLuno.Statem do
       %{"balance" => [%{"balance" => avail_bal, "unconfirmed" => unconf_bal, "reserved" => reserved}]}
     } = CfLuno.Api.balance(asset)
     avail_bal = to_float(avail_bal) + to_float(unconf_bal) - to_float(reserved)
-    Logger.info("Avaialable #{inspect asset} balance: #{inspect avail_bal}")
+    Logger.info("Available #{inspect asset} balance: #{inspect avail_bal}")
     avail_bal
   end
 
@@ -258,8 +259,8 @@ defmodule CfLuno.Statem do
     end
   end
 
-  defp calc_limit_order_price(0, _curr_limit_price, _curr_limit_vol, type) do
-    {:ok, %{"bid" => bid, "ask" => ask}} = CfLuno.Api.get_ticker("XBTZAR")
+  defp calc_limit_order_price(0, _curr_limit_vol, type, %{pair: pair}) do
+    {:ok, %{"bid" => bid, "ask" => ask}} = CfLuno.Api.get_ticker(pair)
     Logger.info("Luno bid price:" <> bid <> " ask price:" <> ask)
     {bid_int, _rem_bin} = Integer.parse(bid)
     {ask_int, _rem_bin} = Integer.parse(ask)
@@ -269,8 +270,8 @@ defmodule CfLuno.Statem do
       {:ok, calc_best_price(bid_int, bid_int, ask_int, type)}
     end
   end
-  defp calc_limit_order_price(before_limit_vol, curr_price, curr_vol, type) do
-    {:ok, %{"asks" => asks, "bids" => bids}} = CfLuno.Api.get_orderbook_top("XBTZAR")
+  defp calc_limit_order_price(before_limit_vol, curr_vol, type, %{order_price: curr_price, pair: pair}) do
+    {:ok, %{"asks" => asks, "bids" => bids}} = CfLuno.Api.get_orderbook_top(pair)
     {type_orders, alt_orders} = if type == "ASK", do: {asks, bids}, else: {bids, asks}
     Enum.reduce_while(
       type_orders,
@@ -323,10 +324,11 @@ defmodule CfLuno.Statem do
          alt_vol,
          _hodl_amt,
          type,
-         %{order_time: old_timestamp, order_price: old_price, order_id: order_id, mode: mode}
+         %{order_time: old_timestamp, order_price: old_price, order_id: order_id, mode: mode, pair: pair}
        )
        when old_price == new_price do
-    [timestamp, rem_vol, alt_vol] = get_return_vlaues(old_timestamp, type, new_vol, alt_vol, mode)
+    {:ok, %{"trades" => trades}} = CfLuno.Api.list_trades([pair: pair, since: old_timestamp])
+    [timestamp, rem_vol, alt_vol] = get_return_vlaues(trades, old_timestamp, type, new_vol, alt_vol, mode)
     Logger.info("Limit order #{inspect order_id} remaining volume #{inspect rem_vol} at #{inspect old_price}")
     {:ok, [timestamp, rem_vol, alt_vol, order_id]}
   end
@@ -336,22 +338,22 @@ defmodule CfLuno.Statem do
          alt_vol,
          hodl_amt,
          type,
-         %{order_time: old_timestamp, order_price: old_price, order_id: order_id, mode: mode}
+         %{order_time: old_timestamp, order_price: old_price, order_id: order_id, mode: mode, pair: pair}
        ) do
     CfLuno.Api.stop_order(order_id, old_price)
-    [timestamp, rem_vol, alt_vol] = get_return_values(old_timestamp, type, new_vol, alt_vol, mode)
     Process.sleep(100) #wait for balance to update after cancelling order
+    {:ok, %{"trades" => trades}} = CfLuno.Api.list_trades([pair: pair, since: old_timestamp])
+    [timestamp, rem_vol, alt_vol] = get_return_vlaues(trades, old_timestamp, type, new_vol, alt_vol, mode)
     bal = if type == "ASK", do: get_bal("XBT"), else: get_bal("ZAR")
     if bal > hodl_amt and rem_vol >= @min_btc_order_vol do
-      {:ok, %{"order_id" => new_order_id}} = CfLuno.Api.post_order("XBTZAR", type, rem_vol, new_price, "true")
+      {:ok, %{"order_id" => new_order_id}} = CfLuno.Api.post_order(pair, type, rem_vol, new_price, "true")
       {:ok, [timestamp, rem_vol, alt_vol, new_order_id]}
     else
       {:ok, [timestamp, 0, alt_vol, order_id]}
     end
   end
 
-  defp get_return_values(old_timestamp, type, new_vol, alt_vol, mode) do
-    {:ok, %{"trades" => trades}} = CfLuno.Api.list_trades([pair: "XBTZAR", since: old_timestamp])
+  defp get_return_vlaues(trades, old_timestamp, type, new_vol, alt_vol, mode) do
     traded_vol = get_traded_volume_since(trades, type)
     rem_vol = max(new_vol - traded_vol, 0)
     alt_vol = if mode == "Bot", do: alt_vol + traded_vol, else: alt_vol

@@ -1,15 +1,15 @@
-defmodule CfLuno.CbWsClient do
+defmodule CfCb.WsClient do
   use WebSockex
 
   @url "wss://ws-feed.pro.coinbase.com"
 
-  def start_link(products \\ []) do
-    {:ok, pid} = WebSockex.start_link(@url, __MODULE__, :no_state)
+  def start_link({products, cb_fun} ) do
+    {:ok, pid} = WebSockex.start_link(@url, __MODULE__, %{products: products, cb_fun: cb_fun})
     subscribe(pid, products)
     {:ok, pid}
   end
 
-  def handle_connect(_conn, state) do
+  def handle_connect(_conn, %{products: products} = state) do
     IO.puts("connected!")
     {:ok, state}
   end
@@ -23,8 +23,8 @@ defmodule CfLuno.CbWsClient do
     handle_msg(Jason.decode!(msg), state)
   end
 
-  def handle_msg( %{"type" => "ticker"} = msg, state) do
-    CfLuno.Statem.oracle_update(msg)
+  def handle_msg( %{"type" => "ticker"} = msg, %{cb_fun: cb_fun} = state) do
+    cb_fun.(msg)
     {:ok, state}
   end
 
