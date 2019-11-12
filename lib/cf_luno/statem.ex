@@ -339,7 +339,8 @@ defmodule CfLuno.Statem do
          %{order_time: old_timestamp, order_price: old_price, order_id: order_id, mode: mode}
        ) do
     CfLuno.Api.stop_order(order_id, old_price)
-    [timestamp, rem_vol, alt_vol] = get_return_vlaues(old_timestamp, type, new_vol, alt_vol, mode)
+    [timestamp, rem_vol, alt_vol] = get_return_values(old_timestamp, type, new_vol, alt_vol, mode)
+    Process.sleep(100) #wait for balance to update after cancelling order
     bal = if type == "ASK", do: get_bal("XBT"), else: get_bal("ZAR")
     if bal > hodl_amt and rem_vol >= @min_btc_order_vol do
       {:ok, %{"order_id" => new_order_id}} = CfLuno.Api.post_order("XBTZAR", type, rem_vol, new_price, "true")
@@ -349,7 +350,7 @@ defmodule CfLuno.Statem do
     end
   end
 
-  defp get_return_vlaues(old_timestamp, type, new_vol, alt_vol, mode) do
+  defp get_return_values(old_timestamp, type, new_vol, alt_vol, mode) do
     {:ok, %{"trades" => trades}} = CfLuno.Api.list_trades([pair: "XBTZAR", since: old_timestamp])
     traded_vol = get_traded_volume_since(trades, type)
     rem_vol = max(new_vol - traded_vol, 0)
