@@ -1,7 +1,6 @@
 defmodule CfCb.Api do
   require Logger
-
-  @cb_pub_uri "https://api.pro.coinbase.com"
+  
   @cb_uri "https://api-public.sandbox.pro.coinbase.com"
 
   def get_cb_ticker(pair) do
@@ -14,9 +13,9 @@ defmodule CfCb.Api do
     |> invoke_private_api_get()
   end
 
-  def get_accounts(id) do
-    "/accounts"
-    |> invoke_private_api_get()
+  def get_accounts(order_id) do
+  {:ok, accounts} = invoke_private_api_get("/accounts")
+  Enum.find(accounts, fn (%{"id" => id} = account) when id == order_id -> account end)
   end
 
   def get_account(id) do
@@ -24,10 +23,16 @@ defmodule CfCb.Api do
     |> invoke_private_api_get()
   end
 
-  def list_orders(product_id, status) do
-    "/orders?product_id=" <> product_id <> "&status=" <> status
+  def list_orders(params) do
+    "/orders?" <> URI.encode_query(params)
     |> invoke_private_api_get()
   end
+
+  def fills(params) do
+    "/fills?" <> URI.encode_query(params)
+    |> invoke_private_api_get()
+  end
+
 
   #---------------------------------------------------------------------------------------------------------------------
   # private functions

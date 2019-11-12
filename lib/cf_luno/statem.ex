@@ -125,7 +125,7 @@ defmodule CfLuno.Statem do
     if seconds_diff > @trade_delta_sec do
       {{:value, {q_price, q_datetime}}, queue} = :queue.out(queue)
       queue = :queue.in({float_price, datetime}, queue)
-      transitions = apply(CfLuno.Transitions, state, [])
+      transitions = apply(CfBot.Transitions, state, [])
       {next_state, next_action} =
         cond do
           btc_sell_amt > 0 and btc_buy_amt > 0 -> check_delta(old_price, float_price, transitions[:buy_or_sell])
@@ -139,7 +139,7 @@ defmodule CfLuno.Statem do
         Logger.info("old oracle price: #{inspect old_price}, new oracle price:#{inspect float_price}")
         Logger.info("Time between trades: #{inspect seconds_diff}")
         new_btc_sell_amt = if mode == "hodl" and btc_sell_amt == 0,
-                              do: max(get_bal("XBT") - btc_hodl_amt,0), else: btc_sell_amt
+                              do: max(get_bal("XBT") - btc_hodl_amt, 0), else: btc_sell_amt
         {:next_state, next_state, %{new_data | btc_sell_amt: new_btc_sell_amt}, next_action}
       else
         {:next_state, next_state, new_data}
@@ -190,21 +190,16 @@ defmodule CfLuno.Statem do
         :internal,
         :cancel_orders,
         _state,
-        %{order_time: order_time, btc_sell_amt: btc_sell_amt, btc_buy_amt: btc_buy_amt, req_mod: mod, pair: pair} = data
+        %{order_time: order_ts, btc_sell_amt: sell_amt, btc_buy_amt: buy_amt, req_mod: mod, pair: pair, order_id: id}
+        = data
       ) do
     orders = mod.list_open_orders(pair)
     :ok = cancel_orders(orders)
-    {:ok, %{"trades" => trades}} = CfLuno.Api.list_trades([pair: pair, since: order_time])
-    vol_sold = get_traded_volume_since(trades, "ASK")
-    vol_bought = get_traded_volume_since(trades, "BID")
+    trades = mod.sum_trades(pair, order_ts, id)
+    vol_sold = trades["ASK"]
+    vol_bought = trades["BID"]
     new_data =
-      %{
-        data |
-        order_id: 0,
-        order_price: 0,
-        btc_sell_amt: btc_sell_amt - vol_sold,
-        btc_buy_amt: btc_buy_amt - vol_bought
-      }
+      %{data | order_id: 0, order_price: 0, btc_sell_amt: sell_amt - vol_sold, btc_buy_amt: buy_amt - vol_bought}
     {:keep_state, new_data}
   end
 
@@ -324,13 +319,13 @@ defmodule CfLuno.Statem do
          alt_vol,
          _hodl_amt,
          type,
-         %{order_time: old_timestamp, order_price: old_price, order_id: order_id, mode: mode, pair: pair}
+         %{order_time: old_ts, order_price: old_price, order_id: order_id, mode: mode, req_mod: mod, pair: pair}
        )
        when old_price == new_price do
-    {:ok, %{"trades" => trades}} = CfLuno.Api.list_trades([pair: pair, since: old_timestamp])
-    [timestamp, rem_vol, alt_vol] = get_return_vlaues(trades, type, new_vol, alt_vol, mode)
+    traded_vol = mod.sum_trades(pair, old_ts, order_id)[type]
+    [ts, rem_vol, alt_vol] = get_return_vlaues(traded_vol, new_vol, alt_vol, mode)
     Logger.info("Limit order #{inspect order_id} remaining volume #{inspect rem_vol} at #{inspect old_price}")
-    {:ok, [timestamp, rem_vol, alt_vol, order_id]}
+    {:ok, [ts, rem_vol, alt_vol, order_id]}
   end
   defp place_limit_order(
          new_price,
@@ -338,40 +333,25 @@ defmodule CfLuno.Statem do
          alt_vol,
          hodl_amt,
          type,
-         %{order_time: old_timestamp, order_price: old_price, order_id: order_id, mode: mode, pair: pair}
+         %{order_time: old_ts, order_price: old_price, order_id: order_id, mode: mode, req_mod: mod, pair: pair}
        ) do
     CfLuno.Api.stop_order(order_id, old_price)
-    {:ok, %{"trades" => trades}} = CfLuno.Api.list_trades([pair: pair, since: old_timestamp])
-    [timestamp, rem_vol, alt_vol] = get_return_vlaues(trades, type, new_vol, alt_vol, mode)
+    traded_vol = mod.sum_trades(pair, old_ts, order_id)[type]
+    [ts, rem_vol, alt_vol] = get_return_vlaues(traded_vol, new_vol, alt_vol, mode)
     bal = if type == "ASK", do: get_bal("XBT"), else: get_bal("ZAR")
     if bal > hodl_amt and rem_vol >= @min_btc_order_vol do
       {:ok, %{"order_id" => new_order_id}} = CfLuno.Api.post_order(pair, type, rem_vol, new_price, "true")
-      {:ok, [timestamp, rem_vol, alt_vol, new_order_id]}
+      {:ok, [ts, rem_vol, alt_vol, new_order_id]}
     else
-      {:ok, [timestamp, 0, alt_vol, order_id]}
+      {:ok, [ts, 0, alt_vol, order_id]}
     end
   end
 
-  defp get_return_vlaues(trades, type, new_vol, alt_vol, mode) do
-    traded_vol = get_traded_volume_since(trades, type)
+  defp get_return_vlaues(traded_vol, new_vol, alt_vol, mode) do
     rem_vol = max(new_vol - traded_vol, 0)
-    alt_vol = if mode == "Bot", do: alt_vol + traded_vol, else: alt_vol
-    timestamp = :erlang.system_time(:millisecond)
-    [timestamp, rem_vol, alt_vol]
-  end
-
-  defp get_traded_volume_since(nil, _type), do: 0
-  defp get_traded_volume_since(trades, type) do
-    vol = Enum.reduce(
-      trades,
-      0,
-      fn
-        (%{"type" => order_type, "volume" => volume}, vol_acc) when order_type == type -> vol_acc + to_float(volume)
-        (_, vol_acc) -> vol_acc
-      end
-    )
-    Logger.info("Traded vol: #{inspect vol}")
-    vol
+    alt_vol = if mode == "bot", do: alt_vol + traded_vol, else: alt_vol
+    ts = :erlang.system_time(:millisecond)
+    [ts, rem_vol, alt_vol]
   end
 
   def cancel_orders(nil), do: :ok
