@@ -6,25 +6,25 @@ defmodule CfLuno.Api do
   #---------------------------------------------------------------------------------------------------------------------
   # Mock api
   #---------------------------------------------------------------------------------------------------------------------
-  def post_order(pair, type, volume, price, post_only) when is_binary(pair) do
-    vol_str = :erlang.float_to_binary(volume, [{:decimals, 6}])
-    price_str = to_string(price)
-    Logger.info("Mock Limit " <> type <> " for " <> vol_str <> " at " <> price_str)
-    path = "/postorder?pair=" <> pair <> "&type=" <> type <> "&volume=" <> vol_str <> "&price=" <> price_str <> "&post_only=" <> post_only
-    Logger.debug("private api v1 post url: #{inspect path}")
-    {:ok, %{"order_id" => "TestOrderID"}}
-  end
-
-  def stop_order(order_id, price) when is_binary(order_id) do
-    Logger.info("Mock cancel limit order #{inspect order_id} at #{inspect price}")
-    path = "/stoporder?order_id=" <> order_id
-    Logger.debug("private api v1 post url: #{inspect path}")
-    {:ok, %{"success" => true}}
-  end
-
-  def list_trades(_params) do
-    {:ok, %{"trades" => [%{"type" => "ASK", "volume" => "0.0005"}, %{"type" => "BID", "volume" => "0.0005"}]}}
-  end
+#  def post_order(pair, type, volume, price, post_only) when is_binary(pair) do
+#    vol_str = :erlang.float_to_binary(volume, [{:decimals, 6}])
+#    price_str = to_string(price)
+#    Logger.info("Mock Limit " <> type <> " for " <> vol_str <> " at " <> price_str)
+#    path = "/postorder?pair=" <> pair <> "&type=" <> type <> "&volume=" <> vol_str <> "&price=" <> price_str <> "&post_only=" <> post_only
+#    Logger.debug("private api v1 post url: #{inspect path}")
+#    {:ok, %{"order_id" => "TestOrderID"}}
+#  end
+#
+#  def stop_order(order_id, price) when is_binary(order_id) do
+#    Logger.info("Mock cancel limit order #{inspect order_id} at #{inspect price}")
+#    path = "/stoporder?order_id=" <> order_id
+#    Logger.debug("private api v1 post url: #{inspect path}")
+#    {:ok, %{"success" => true}}
+#  end
+#
+#  def list_trades(_params) do
+#    {:ok, %{"trades" => [%{"type" => "ASK", "volume" => "0.0005"}, %{"type" => "BID", "volume" => "0.0005"}]}}
+#  end
 
   #---------------------------------------------------------------------------------------------------------------------
   # API
@@ -78,7 +78,7 @@ defmodule CfLuno.Api do
     {:ok, %{"success" => true}}
   end
 
-  def list_trades([pair: _] = params) do
+  def list_trades(params) do
     query_str = URI.encode_query(params)
     "/listtrades?" <> query_str
     |> invoke_private_api_v1_get()
