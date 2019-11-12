@@ -1,5 +1,4 @@
-defmodule CfLuno.Transitions do
-  @moduledoc false
+defmodule CfBot.Transitions do
   
   @limit_sell_action {:next_event, :internal, {:limit_sell, []}}
   @limit_buy_action {:next_event, :internal, {:limit_buy, []}}

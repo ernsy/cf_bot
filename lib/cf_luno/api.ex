@@ -43,8 +43,8 @@ defmodule CfLuno.Api do
     |> invoke_public_api_v1()
   end
 
-  def list_orders(pair, state) do
-    "/listorders?pair=" <> pair <> "&state=" <> state
+  def list_orders(params) do
+    "/listorders?" <> URI.encode_query(params)
     |> invoke_private_api_v1_get()
   end
 
@@ -72,9 +72,8 @@ defmodule CfLuno.Api do
     {:ok, %{"success" => true}}
   end
 
-  def list_trades([pair: _] = params) do
-    query_str = URI.encode_query(params)
-    "/listtrades?" <> query_str
+  def list_trades(params) do
+    "/listtrades?" <> URI.encode_query(params)
     |> invoke_private_api_v1_get()
   end
 
