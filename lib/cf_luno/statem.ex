@@ -342,7 +342,7 @@ defmodule CfLuno.Statem do
          %{order_time: old_timestamp, order_price: old_price, order_id: order_id, mode: mode, pair: pair}
        ) do
     CfLuno.Api.stop_order(order_id, old_price)
-    Process.sleep(100) #wait for balance to update after cancelling order
+    Process.sleep(200) #wait for balance to update after cancelling order
     {:ok, %{"trades" => trades}} = CfLuno.Api.list_trades([pair: pair, since: old_timestamp])
     [timestamp, rem_vol, alt_vol] = get_return_vlaues(trades, old_timestamp, type, new_vol, alt_vol, mode)
     bal = if type == "ASK", do: get_bal("XBT"), else: get_bal("ZAR")
