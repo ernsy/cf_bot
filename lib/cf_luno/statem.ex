@@ -356,7 +356,7 @@ defmodule CfLuno.Statem do
   defp get_return_vlaues(trades, old_timestamp, type, new_vol, alt_vol, mode) do
     traded_vol = get_traded_volume_since(trades, type)
     rem_vol = max(new_vol - traded_vol, 0)
-    alt_vol = if mode == "Bot", do: alt_vol + traded_vol, else: alt_vol
+    alt_vol = if mode == "bot", do: alt_vol + traded_vol, else: alt_vol
     timestamp = :erlang.system_time(:millisecond)
     [timestamp, rem_vol, alt_vol]
   end
