@@ -32,12 +32,6 @@ defmodule CfLuno.Api do
   @doc """
     Coinbase is used as an oracle price
   """
-  def get_cb_ticker(pair) do
-    url = "https://api.pro.coinbase.com/products/" <> pair <> "/ticker"
-    Logger.debug("CB public api v1 url: #{inspect url}")
-    HTTPoison.get(url)
-    |> JsonUtils.decode_json_response()
-  end
 
   def get_ticker(pair) do
     "/ticker?pair=" <> pair
