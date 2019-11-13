@@ -1,6 +1,19 @@
-defmodule CfLuno.Request do
+defmodule CfLuno.Mediate do
   require Logger
   import String, only: [to_float: 1]
+
+  def get_bal(asset) do
+    {:ok, %{"balance" => [%{"balance" => avail_bal, "unconfirmed" => unconf_bal, "reserved" => reserved}]}} =
+    CfLuno.Api.balance(asset)
+    avail_bal = to_float(avail_bal) + to_float(unconf_bal) - to_float(reserved)
+    Logger.info("Available #{inspect asset} balance: #{inspect avail_bal}")
+    avail_bal
+  end
+
+  def get_orderbook(pair) do
+  {:ok, orderbook} = CfLuno.Api.get_orderbook_top(pair)
+  orderbook
+  end
 
   def list_open_orders(pair) do
     {:ok, %{"orders" => orders}} = CfLuno.Api.list_orders([pair: pair, state: "PENDING"])
@@ -12,21 +25,11 @@ defmodule CfLuno.Request do
     get_traded_volume(trades)
   end
 
-  def get_bal(asset) do
-    {
-      :ok,
-      %{"balance" => [%{"balance" => avail_bal, "unconfirmed" => unconf_bal, "reserved" => reserved}]}
-    } = CfLuno.Api.balance(asset)
-    avail_bal = to_float(avail_bal) + to_float(unconf_bal) - to_float(reserved)
-    Logger.info("Available #{inspect asset} balance: #{inspect avail_bal}")
-    avail_bal
-  end
-
   #---------------------------------------------------------------------------------------------------------------------
   # helper functions
   #---------------------------------------------------------------------------------------------------------------------
 
-  defp get_traded_volume(nil), do: [0, 0]
+  defp get_traded_volume(nil), do: %{"ASK" => 0, "BID" => 0}
   defp get_traded_volume(trades) do
     [ask, bid] = Enum.reduce(
       trades,
