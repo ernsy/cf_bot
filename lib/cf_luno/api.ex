@@ -43,13 +43,13 @@ defmodule CfLuno.Api do
     |> invoke_public_api_v1()
   end
 
-  def list_orders(params) do
-    "/listorders?" <> URI.encode_query(params)
+  def balance(assets) do
+    "/balance?assets=" <> assets
     |> invoke_private_api_v1_get()
   end
 
-  def balance(assets) do
-    "/balance?assets=" <> assets
+  def list_orders(params) do
+    "/listorders?" <> URI.encode_query(params)
     |> invoke_private_api_v1_get()
   end
 

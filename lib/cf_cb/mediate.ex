@@ -1,6 +1,18 @@
-defmodule CfCb.Request do
+defmodule CfCb.Mediate do
   require Logger
   import String, only: [to_float: 1]
+
+  def get_ticker(product_id) do
+    {:ok, ticker} = CfCb.Api.get_ticker(product_id)
+    ticker
+  end
+
+  def get_orderbook(product_id) do
+    {:ok, %{"bids" => bids, "asks" => asks}} = CfCb.Api.get_orderbook_top(product_id)
+    mediated_bids = mediate_order_book(tl(bids))
+    mediated_asks = mediate_order_book(tl(asks))
+    %{"bids" => mediated_bids, "asks" => mediated_asks}
+  end
 
   def list_open_orders(product_id) do
     {:ok, orders} = CfCb.Api.list_orders([product_id: product_id, status: "open"])
@@ -16,7 +28,17 @@ defmodule CfCb.Request do
   # helper functions
   #---------------------------------------------------------------------------------------------------------------------
 
-  defp get_traded_volume(nil), do: [0, 0]
+
+  defp mediate_order_book(orders) do
+    Enum.map(
+      orders,
+      fn ([price, size, _num_orders]) ->
+        %{"volume" => size, "price" => price}
+      end
+    )
+  end
+
+  defp get_traded_volume(nil), do: %{"ASK" => 0, "BID" => 0}
   defp get_traded_volume(fills) do
     [ask, bid] = Enum.reduce(
       fills,

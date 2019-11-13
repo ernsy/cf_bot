@@ -138,7 +138,7 @@ defmodule CfLuno.Statem do
         Logger.warn("State change:#{inspect next_state}")
         Logger.info("old oracle price: #{inspect old_price}, new oracle price:#{inspect float_price}")
         Logger.info("Time between trades: #{inspect seconds_diff}")
-        new_btc_sell_amt = if mode == "hodl" and btc_sell_amt == 0,
+        new_btc_sell_amt = if mode == "hodl" and btc_sell_amt <= 0,
                               do: max(get_bal("XBT") - btc_hodl_amt, 0), else: btc_sell_amt
         {:next_state, next_state, %{new_data | btc_sell_amt: new_btc_sell_amt}, next_action}
       else
@@ -181,7 +181,7 @@ defmodule CfLuno.Statem do
       :ok = :dets.insert(:disk_storage, {:data, new_data})
       {:keep_state, new_data, [{:state_timeout, @review_time, {action, []}} | post_actions]}
     else
-      {:next_state, :wait_stable, %{data | vol_key => 0}, []}
+      {:next_state, :wait_stable, %{data | vol_key => 0}, [{:next_event, :internal, :cancel_orders}]}
     end
 
   end
@@ -227,7 +227,7 @@ defmodule CfLuno.Statem do
   #---------------------------------------------------------------------------------------------------------------------
 
   defp get_oracle_price() do
-    {:ok, %{"price" => price, "time" => time}} = CfCb.Api.get_cb_ticker("BTC-USD")
+    {:ok, %{"price" => price, "time" => time}} = CfCb.Api.get_oracle_ticker("BTC-USD")
     {float_price, _rem_bin} = Float.parse(price)
     {:ok, datetime, _} = DateTime.from_iso8601(time)
     {:ok, [float_price, datetime]}
@@ -254,9 +254,9 @@ defmodule CfLuno.Statem do
     end
   end
 
-  defp calc_limit_order_price(0, _curr_limit_vol, type, %{pair: pair}) do
-    {:ok, %{"bid" => bid, "ask" => ask}} = CfLuno.Api.get_ticker(pair)
-    Logger.info("Luno bid price:" <> bid <> " ask price:" <> ask)
+  defp calc_limit_order_price(0, _curr_limit_vol, type, %{req_mod: mod, pair: pair}) do
+    %{"bid" => bid, "ask" => ask} = mod.get_ticker(pair)
+    Logger.info("Bid price:" <> bid <> " ask price:" <> ask)
     {bid_int, _rem_bin} = Integer.parse(bid)
     {ask_int, _rem_bin} = Integer.parse(ask)
     if type == "ASK" do
@@ -265,15 +265,15 @@ defmodule CfLuno.Statem do
       {:ok, calc_best_price(bid_int, bid_int, ask_int, type)}
     end
   end
-  defp calc_limit_order_price(before_limit_vol, curr_vol, type, %{order_price: curr_price, pair: pair}) do
-    {:ok, %{"asks" => asks, "bids" => bids}} = CfLuno.Api.get_orderbook_top(pair)
+  defp calc_limit_order_price(before_limit_vol, curr_vol, type, %{order_price: curr_price, req_mod: mod, pair: pair}) do
+    %{"asks" => asks, "bids" => bids} = mod.get_orderbook(pair)
     {type_orders, alt_orders} = if type == "ASK", do: {asks, bids}, else: {bids, asks}
     Enum.reduce_while(
       type_orders,
       {0, curr_vol},
-      fn (order, {acc_volume, curr_vol}) ->
-        volume = to_float(order["volume"])
-        {price, _rem_bin} = Integer.parse(order["price"])
+      fn (%{"volume" => volume_str, "price" => price_str}, {acc_volume, curr_vol}) ->
+        volume = to_float(volume_str)
+        {price, _rem_bin} = Integer.parse(price_str)
         {new_acc_volume, rem_limit_vol} =
           if curr_vol > 0 and ((type == "ASK" and price >= curr_price) or (type == "BID" and price <= curr_price)) do
             new_acc_volume = acc_volume + volume - curr_vol
@@ -359,7 +359,7 @@ defmodule CfLuno.Statem do
     Enum.each(
       orders,
       fn (%{id: id, price: price}) ->
-        {:ok, %{"success" => true}} = CfLuno.Api.stop_order(id, price)
+        CfLuno.Api.stop_order(id, price)
       end
     )
   end

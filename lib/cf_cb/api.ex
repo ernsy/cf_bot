@@ -3,8 +3,22 @@ defmodule CfCb.Api do
   
   @cb_uri "https://api-public.sandbox.pro.coinbase.com"
 
-  def get_cb_ticker(pair) do
-    "/products/" <> pair <> "/ticker"
+  def get_oracle_ticker(product_id) do
+    url = "https://api.pro.coinbase.com/products/" <> product_id <> "/ticker"
+    Logger.debug("CB public api v1 url: #{inspect url}")
+    HTTPoison.get(url)
+    |> JsonUtils.decode_json_response()
+    #"/products/" <> product_id <> "/ticker"
+    #|> invoke_public_api()
+  end
+
+  def get_ticker(product_id) do
+    "/products/" <> product_id <> "/ticker"
+    |> invoke_public_api()
+  end
+
+  def get_orderbook_top(product_id) do
+    "/products/" <> product_id <> "/book?level=2"
     |> invoke_public_api()
   end
 
