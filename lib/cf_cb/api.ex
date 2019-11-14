@@ -27,11 +27,6 @@ defmodule CfCb.Api do
     |> invoke_private_api_get()
   end
 
-  def get_accounts(order_id) do
-  {:ok, accounts} = invoke_private_api_get("/accounts")
-  Enum.find(accounts, fn (%{"id" => id} = account) when id == order_id -> account end)
-  end
-
   def get_account(id) do
     "/accounts/" <> id
     |> invoke_private_api_get()

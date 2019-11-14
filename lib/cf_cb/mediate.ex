@@ -7,11 +7,24 @@ defmodule CfCb.Mediate do
     ticker
   end
 
+  def get_avail_bal(currency) do
+    {:ok, accounts} = CfCb.Api.get_accounts()
+    account = Enum.find(accounts, fn (%{"currency" => acc_curr} = account) when acc_curr == currency -> account end)
+    avail_bal = to_float(account["available"])
+    Logger.info("Available #{currency} balance: #{avail_bal}")
+    avail_bal
+  end
+
   def get_orderbook(product_id) do
     {:ok, %{"bids" => bids, "asks" => asks}} = CfCb.Api.get_orderbook_top(product_id)
     mediated_bids = mediate_order_book(tl(bids))
     mediated_asks = mediate_order_book(tl(asks))
     %{"bids" => mediated_bids, "asks" => mediated_asks}
+  end
+
+  def stop_order(order_id, price) do
+    Logger.info("Cancel limit order #{order_id} at #{price}")
+    CfCb.cancel_order(order_id)
   end
 
   def list_open_orders(product_id) do

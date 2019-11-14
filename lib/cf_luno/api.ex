@@ -6,19 +6,15 @@ defmodule CfLuno.Api do
   #---------------------------------------------------------------------------------------------------------------------
   # Mock api
   #---------------------------------------------------------------------------------------------------------------------
-  def post_order(pair, type, volume, price, post_only) when is_binary(pair) do
-    vol_str = :erlang.float_to_binary(volume, [{:decimals, 6}])
-    price_str = to_string(price)
-    Logger.info("Mock Limit " <> type <> " for " <> vol_str <> " at " <> price_str)
-    path = "/postorder?pair=" <> pair <> "&type=" <> type <> "&volume=" <> vol_str <> "&price=" <> price_str <> "&post_only=" <> post_only
-    Logger.debug("private api v1 post url: #{inspect path}")
+  def post_order(params) do
+    path = "/postorder?" <> URI.encode_query(params)
+    Logger.debug("Mock post order url: #{inspect path}")
     {:ok, %{"order_id" => "TestOrderID"}}
   end
 
-  def stop_order(order_id, price) when is_binary(order_id) do
-    Logger.info("Mock cancel limit order #{inspect order_id} at #{inspect price}")
+  def stop_order(order_id) do
     path = "/stoporder?order_id=" <> order_id
-    Logger.debug("private api v1 post url: #{inspect path}")
+    Logger.debug("mock stop order url: #{inspect path}")
     {:ok, %{"success" => true}}
   end
 
@@ -38,38 +34,29 @@ defmodule CfLuno.Api do
     |> invoke_public_api_v1()
   end
 
-  def get_orderbook_top(pair) do
-    "/orderbook_top?pair=" <> pair
-    |> invoke_public_api_v1()
-  end
-
   def balance(assets) do
     "/balance?assets=" <> assets
     |> invoke_private_api_v1_get()
   end
 
-  def list_orders(params) do
-    "/listorders?" <> URI.encode_query(params)
-    |> invoke_private_api_v1_get()
+  def get_orderbook_top(pair) do
+    "/orderbook_top?pair=" <> pair
+    |> invoke_public_api_v1()
   end
 
-  def post_order(pair, type, volume, price, post_only) do
-    vol_str = :erlang.float_to_binary(volume, [{:decimals, 6}])
-    price_str = to_string(price)
-    Logger.info("Limit " <> type <> " for " <> vol_str <> " at " <> price_str)
-    "/postorder?pair=" <> pair <> "&type=" <> type <> "&volume=" <> vol_str <> "&price=" <> price_str <> "&post_only=" <> post_only
+  def post_order(params) do
+    "/postorder?" <> URI.encode_query(params)
     |> invoke_private_api_v1_post()
   end
 
-  def stop_order(order_id), do: stop_order(order_id, "unknown")
-  def stop_order(order_id, price) when is_binary(order_id) do
-    Logger.info("Cancel limit order #{inspect order_id} at #{inspect price}")
+  def stop_order(order_id) do
     "/stoporder?order_id=" <> order_id
     |> invoke_private_api_v1_post()
   end
-  def stop_order(order_id, price)  do
-    Logger.info("No limit order #{inspect order_id} at #{inspect price}")
-    {:ok, %{"success" => true}}
+
+  def list_orders(params) do
+    "/listorders?" <> URI.encode_query(params)
+    |> invoke_private_api_v1_get()
   end
 
   def list_trades(params) do
