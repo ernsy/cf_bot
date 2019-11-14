@@ -7,7 +7,7 @@ defmodule CfLuno.Statem do
   @dt_perc 0.0025
   @ut_perc 0.0025
   @stable_perc 0.0002
-  @min_btc_order_vol 0.0005
+  @min_order_vol 0.0005
 
   @review_time 2000
   @trade_delta_sec 60
@@ -29,17 +29,17 @@ defmodule CfLuno.Statem do
   end
 
   def set_sell_amt(amount) when is_float(amount) do
-    GenStateMachine.cast(__MODULE__, {:set_data, :btc_sell_amt, amount})
+    GenStateMachine.cast(__MODULE__, {:set_data, :sell_amt, amount})
   end
 
   def set_buy_amt(amount) when is_float(amount) do
-    GenStateMachine.cast(__MODULE__, {:set_data, :btc_buy_amt, amount})
+    GenStateMachine.cast(__MODULE__, {:set_data, :buy_amt, amount})
   end
 
   def set_hodl_amt(asset, amount) do
     type = cond do
-      asset == "BTC" -> :btc_hodl_amt
-      asset == "ZAR" -> :zar_hodl_amt
+      asset == "Primary" -> :prim_hodl_amt
+      asset == "Secondary" -> :sec_hodl_amt
     end
     GenStateMachine.cast(__MODULE__, {:set_data, type, amount})
   end
@@ -56,24 +56,26 @@ defmodule CfLuno.Statem do
   # callbacks
   #---------------------------------------------------------------------------------------------------------------------
 
-  def init(%{med_mod: med_mod, pair: pair} = init_args) do
+  def init(%{med_mod: med_mod, pair: pair, oracle_pair: oracle_pair} = init_args) do
     orders = med_mod.list_open_orders(pair)
     :ok = cancel_orders(orders, med_mod)
     {:ok, :disk_storage} = :dets.open_file(:disk_storage, [type: :set])
     data = case :dets.lookup(:disk_storage, :data) do
-      [data: %{btc_sell_amt: _, btc_hodl_amt: _, btc_buy_amt: _, zar_hodl_amt: _, order_time: _, mode: _} = data] ->
+      [data: %{sell_amt: _, prim_hodl_amt: _, buy_amt: _, sec_hodl_amt: _, order_time: _, mode: _} = data] ->
         data
       _ ->
+        prim_curr = String.slice(pair, 0..2)
+        sec_curr = String.slice(pair,-3, 3)
         %{
-          btc_sell_amt: 0,
-          btc_hodl_amt: med_mod.get_avail_bal("XBT"),
-          btc_buy_amt: 0,
-          zar_hodl_amt: med_mod.get_avail_bal("ZAR"),
+          sell_amt: 0,
+          prim_hodl_amt: med_mod.get_avail_bal(prim_curr),
+          buy_amt: 0,
+          sec_hodl_amt: med_mod.get_avail_bal(sec_curr),
           order_time: :erlang.system_time(:millisecond),
           mode: "manual"
         }
     end
-    {:ok, [oracle_price, datetime]} = get_oracle_price()
+    {:ok, [oracle_price, datetime]} = get_oracle_price(oracle_pair)
     queue = :queue.new
     init_data = %{
       oracle_queue: {queue, 0},
@@ -110,44 +112,49 @@ defmodule CfLuno.Statem do
         :cast,
         {:oracle_update, %{"price" => price, "time" => time}},
         state,
-        %{
-          oracle_queue: {queue, length},
-          btc_sell_amt: btc_sell_amt,
-          btc_buy_amt: btc_buy_amt,
-          btc_hodl_amt: btc_hodl_amt,
+        %{oracle_queue: {queue, length},
+          sell_amt: sell_amt,
+          buy_amt: buy_amt,
+          prim_hodl_amt: hodl_amt,
           oracle_ref: {old_price, old_datetime},
           med_mod: med_mod,
+          pair: pair,
           mode: mode
         } = data
       ) do
-    {float_price, _rem_bin} = Float.parse(price)
+    {pricef, _rem_bin} = Float.parse(price)
     {:ok, datetime, _} = DateTime.from_iso8601(time)
     seconds_diff = DateTime.diff(datetime, old_datetime)
     if seconds_diff > @trade_delta_sec do
       {{:value, {q_price, q_datetime}}, queue} = :queue.out(queue)
-      queue = :queue.in({float_price, datetime}, queue)
+      queue = :queue.in({pricef, datetime}, queue)
       transitions = apply(CfBot.Transitions, state, [])
       {next_state, next_action} =
         cond do
-          btc_sell_amt > 0 and btc_buy_amt > 0 -> check_delta(old_price, float_price, transitions[:buy_or_sell])
-          btc_sell_amt > 0 or mode == "hodl" -> check_delta(old_price, float_price, transitions[:sell])
-          btc_buy_amt > 0 -> check_delta(old_price, float_price, transitions[:buy])
+          sell_amt > 0 and buy_amt > 0 -> check_delta(old_price, pricef, transitions[:buy_or_sell])
+          sell_amt > 0 or mode == "hodl" -> check_delta(old_price, pricef, transitions[:sell])
+          buy_amt > 0 -> check_delta(old_price, pricef, transitions[:buy])
           true -> {state, []}
         end
       new_data = %{data | oracle_queue: {queue, length}, oracle_ref: {q_price, q_datetime}}
       if next_state != state do
         Logger.warn("State change:#{next_state}")
-        Logger.info("old oracle price: #{old_price}, new oracle price:#{float_price}")
+        Logger.info("old oracle price: #{old_price}, new oracle price:#{pricef}")
         Logger.info("Time between trades: #{seconds_diff}")
-        new_btc_sell_amt = if mode == "hodl" and btc_sell_amt <= 0,
-                              do: max(med_mod.get_avail_bal("XBT") - btc_hodl_amt, 0), else: btc_sell_amt
-        {:next_state, next_state, %{new_data | btc_sell_amt: new_btc_sell_amt}, next_action}
+        new_sell_amt =
+          if mode == "hodl" and sell_amt <= 0 do
+            prim_curr = String.slice(pair, 0..2)
+            max(med_mod.get_avail_bal(prim_curr) - hodl_amt, 0)
+          else
+            sell_amt
+          end
+        {:next_state, next_state, %{new_data | sell_amt: new_sell_amt}, next_action}
       else
         {:next_state, next_state, new_data}
       end
 
     else
-      new_queue = :queue.in({float_price, datetime}, queue)
+      new_queue = :queue.in({pricef, datetime}, queue)
       new_data = %{data | oracle_queue: {new_queue, length + 1}}
       {:keep_state, new_data}
     end
@@ -158,12 +165,12 @@ defmodule CfLuno.Statem do
         (event_type == :internal or event_type == :state_timeout) and (action == :limit_sell or action == :limit_buy) do
     [vol_key, alt_vol_key, hodl_amt_key, type] =
       if state == :sell or state == :quick_sell do
-        [:btc_sell_amt, :btc_buy_amt, :btc_hodl_amt, "ASK"]
+        [:sell_amt, :buy_amt, :prim_hodl_amt, "ASK"]
       else
-        [:btc_buy_amt, :btc_sell_amt, :zar_hodl_amt, "BID"]
+        [:buy_amt, :sell_amt, :sec_hodl_amt, "BID"]
       end
     order_vol = data[vol_key]
-    if order_vol >= @min_btc_order_vol do
+    if order_vol >= @min_order_vol do
       alt_vol = data[alt_vol_key]
       hodl_amt = data[hodl_amt_key]
       vol_before_order = if state == :quick_sell or state == :quick_buy, do: 0, else: order_vol
@@ -192,7 +199,7 @@ defmodule CfLuno.Statem do
         :internal,
         :cancel_orders,
         _state,
-        %{order_time: order_ts, btc_sell_amt: sell_amt, btc_buy_amt: buy_amt, med_mod: mod, pair: pair, order_id: id}
+        %{order_time: order_ts, sell_amt: sell_amt, buy_amt: buy_amt, med_mod: mod, pair: pair, order_id: id}
         = data
       ) do
     orders = mod.list_open_orders(pair)
@@ -201,7 +208,7 @@ defmodule CfLuno.Statem do
     vol_sold = trades["ASK"]
     vol_bought = trades["BID"]
     new_data =
-      %{data | order_id: 0, order_price: 0, btc_sell_amt: sell_amt - vol_sold, btc_buy_amt: buy_amt - vol_bought}
+      %{data | order_id: 0, order_price: 0, sell_amt: sell_amt - vol_sold, buy_amt: buy_amt - vol_bought}
     {:keep_state, new_data}
   end
 
@@ -228,8 +235,8 @@ defmodule CfLuno.Statem do
   # helper functions
   #---------------------------------------------------------------------------------------------------------------------
 
-  defp get_oracle_price() do
-    {:ok, %{"price" => price, "time" => time}} = CfCb.Api.get_oracle_ticker("BTC-USD")
+  defp get_oracle_price(pair) do
+    {:ok, %{"price" => price, "time" => time}} = CfCb.Api.get_oracle_ticker(pair)
     {float_price, _rem_bin} = Float.parse(price)
     {:ok, datetime, _} = DateTime.from_iso8601(time)
     {:ok, [float_price, datetime]}
@@ -330,8 +337,10 @@ defmodule CfLuno.Statem do
     order_id != 0 && med_mod.stop_order(order_id, old_price)
     traded_vol = med_mod.sum_trades(pair, old_ts, order_id)[type]
     [ts, rem_vol, alt_vol] = get_return_vlaues(traded_vol, new_vol, alt_vol, mode)
-    bal = if type == "ASK", do: med_mod.get_avail_bal("XBT"), else: med_mod.get_avail_bal("ZAR")
-    if bal > hodl_amt and rem_vol >= @min_btc_order_vol do
+    prim_curr = String.slice(pair, 0..2)
+    sec_curr = String.slice(pair,-3, 3)
+    bal = if type == "ASK", do: med_mod.get_avail_bal(prim_curr), else: med_mod.get_avail_bal(sec_curr)
+    if bal > hodl_amt and rem_vol >= @min_order_vol do
       new_order_id = med_mod.post_order(pair, type, rem_vol, new_price, "true")
       {:ok, [ts, rem_vol, alt_vol, new_order_id]}
     else
