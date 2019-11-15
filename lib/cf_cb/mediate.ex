@@ -8,23 +8,48 @@ defmodule CfCb.Mediate do
   end
 
   def get_avail_bal(currency) do
-    {:ok, accounts} = CfCb.Api.get_accounts()
-    account = Enum.find(accounts, fn (%{"currency" => acc_curr} = account) when acc_curr == currency -> account end)
-    avail_bal = to_float(account["available"])
+    {:ok, accounts} = JsonUtils.retry_req(&CfCb.Api.get_accounts/0, [])
+    account = Enum.find(accounts, fn (%{"currency" => acc_curr} = account) -> acc_curr == currency end)
+    {avail_bal, _rem_bin} = Float.parse(account["available"])
     Logger.info("Available #{currency} balance: #{avail_bal}")
     avail_bal
   end
 
   def get_orderbook(product_id) do
-    {:ok, %{"bids" => bids, "asks" => asks}} = CfCb.Api.get_orderbook_top(product_id)
+    {:ok, %{"bids" => bids, "asks" => asks}} = JsonUtils.retry_req(&CfCb.Api.get_orderbook_top,[product_id])
     mediated_bids = mediate_order_book(tl(bids))
     mediated_asks = mediate_order_book(tl(asks))
     %{"bids" => mediated_bids, "asks" => mediated_asks}
   end
 
+  def post_order(pair, type, volume, price, post_only) do
+    vol_str = :erlang.float_to_binary(volume, [{:decimals, 6}])
+    Logger.info("Place limit #{type} for #{vol_str} at #{price}")
+    params = [pair: pair, type: type, volume: vol_str, price: price, post_only: post_only]
+    {:ok, %{"id" => new_order_id}} = CfCb.Api.post_order(params)
+    new_order_id
+  end
+#{
+#"id": "d0c5340b-6d6c-49d9-b567-48c4bfca13d2",
+#"price": "0.10000000",
+#"size": "0.01000000",
+#"product_id": "BTC-USD",
+# "side": "buy",
+#      "stp": "dc",
+#           "type": "limit",
+#                   "time_in_force": "GTC",
+#                                     "post_only": false,
+#"created_at": "2016-12-08T20:02:28.53864Z",
+#"fill_fees": "0.0000000000000000",
+#"filled_size": "0.00000000",
+# "executed_value": "0.0000000000000000",
+#                "status": "pending",
+#                        "settled": false
+#                                   }
+
   def stop_order(order_id, price) do
     Logger.info("Cancel limit order #{order_id} at #{price}")
-    CfCb.cancel_order(order_id)
+    CfCb.Api.cancel_order(order_id)
   end
 
   def list_open_orders(product_id) do
