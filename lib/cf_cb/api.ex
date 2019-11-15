@@ -1,6 +1,6 @@
 defmodule CfCb.Api do
   require Logger
-  
+
   @cb_uri "https://api-public.sandbox.pro.coinbase.com"
 
   def get_oracle_ticker(product_id) do
@@ -17,29 +17,42 @@ defmodule CfCb.Api do
     |> invoke_public_api()
   end
 
+  def get_accounts() do
+    "/accounts"
+    |> invoke_private_api("GET")
+  end
+
+  def get_account(id) do
+    "/accounts/" <> id
+    |> invoke_private_api("GET")
+  end
+
   def get_orderbook_top(product_id) do
     "/products/" <> product_id <> "/book?level=2"
     |> invoke_public_api()
   end
 
-  def get_accounts() do
-    "/accounts"
-    |> invoke_private_api_get()
-  end
+#  {
+#"size": "0.01",
+#"price": "0.100",
+#"side": "buy",
+#"product_id": "BTC-USD"
+#"post_only" : "true"
+# }
 
-  def get_account(id) do
-    "/accounts/" <> id
-    |> invoke_private_api_get()
+  def cancel_order(order_id) do
+    "/orders/" <> order_id
+    |> invoke_private_api("DELETE")
   end
 
   def list_orders(params) do
     "/orders?" <> URI.encode_query(params)
-    |> invoke_private_api_get()
+    |> invoke_private_api("GET")
   end
 
   def fills(params) do
     "/fills?" <> URI.encode_query(params)
-    |> invoke_private_api_get()
+    |> invoke_private_api("GET")
   end
 
 
@@ -48,19 +61,20 @@ defmodule CfCb.Api do
   #---------------------------------------------------------------------------------------------------------------------
 
   defp invoke_public_api(path) do
-    url = @cb_uri <> path
-    Logger.debug("public api v1 url: #{inspect url}")
-    JsonUtils.retry_req(&HTTPoison.get/1, url)
+    Logger.debug("CB public api v1 path: #{inspect path}")
+    @cb_uri <> path
+    |> HTTPoison.get(url)
   end
 
-  defp invoke_private_api_get(path) do
-    JsonUtils.retry_req(&do_invoke_private_api_get/1, path)
-  end
-  defp do_invoke_private_api_get(path) do
+  defp invoke_private_api(path, method) do
     url = @cb_uri <> path
-    headers = get_auth_headers("GET", path)
-    Logger.debug("private api v1 get url: #{inspect url}")
-    HTTPoison.get(url, headers, [])
+    headers = get_auth_headers(method, path)
+    Logger.debug("CB private api v1 url: #{inspect url}")
+    case method do
+      "GET" -> HTTPoison.get(url, headers, [])
+      "DELETE" -> HTTPoison.delete(url, headers, [])
+      "POST" -> HTTPoison.post(url, [], headers, [])
+    end
   end
 
   defp get_auth_headers(method, url_path, body \\ "") do
@@ -72,7 +86,6 @@ defmodule CfCb.Api do
     msg = "#{ts}#{method}#{url_path}#{body}"
     sign = :crypto.hmac(:sha256, secret, msg)
            |> Base.encode64(case: :lower)
-           |> IO.inspect
     [
       {"Content-Type", "application/json"},
       {"CB-ACCESS-KEY", key},
