@@ -35,7 +35,7 @@ defmodule CfLuno.Mediate do
 
   def list_open_orders(pair) do
     {:ok, %{"orders" => orders}} = CfLuno.Api.list_orders([pair: pair, state: "PENDING"])
-    orders && Enum.map(orders, fn (%{"order_id" => id, "limit_price" => price}) -> %{id: id, price: price} end)
+    orders && Enum.map(orders, fn (%{"order_id" => id, "limit_price" => price}) -> %{"id" => id, "price" => price} end)
   end
 
   def sum_trades(pair, since, _order_id) do

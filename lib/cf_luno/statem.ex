@@ -55,7 +55,7 @@ defmodule CfLuno.Statem do
   # callbacks
   #---------------------------------------------------------------------------------------------------------------------
 
-  def init(%{med_mod: med_mod, pair: pair, oracle_pair: oracle_pair} = init_args) do
+  def init(%{med_mod: med_mod, pair: pair, oracle_pair: oracle_pair, min_increment: _} = init_args) do
     orders = med_mod.list_open_orders(pair)
     :ok = cancel_orders(orders, med_mod)
     {:ok, :disk_storage} = :dets.open_file(:disk_storage, [type: :set])
@@ -189,8 +189,13 @@ defmodule CfLuno.Statem do
       :ok = :dets.insert(:disk_storage, {:data, new_data})
       {:keep_state, new_data, [{:state_timeout, @review_time, {action, []}} | post_actions]}
     else
-      next_state = if mode == "hodl", do: :wait_stable, else: state
-      {:next_state, next_state, %{data | vol_key => 0}, []}
+      next_state = if mode == "hodl" do
+        Logger.warn("State change: :wait_stable")
+        :wait_stable
+      else
+        state
+      end
+      {:next_state, :wait_stable, %{data | vol_key => 0, :order_price => 0}, [{:next_event, :internal, :cancel_orders}]}
     end
 
   end
@@ -253,18 +258,28 @@ defmodule CfLuno.Statem do
     end
   end
 
-  defp calc_limit_order_price(0, _curr_limit_vol, type, %{med_mod: med_mod, pair: pair}) do
+  defp calc_limit_order_price(
+         0,
+         _curr_limit_vol,
+         type,
+         %{med_mod: med_mod, pair: pair, min_increment: min_increment}
+       ) do
     %{"bid" => bid, "ask" => ask} = med_mod.get_ticker(pair)
     Logger.info("Bid price:" <> bid <> " ask price:" <> ask)
     {bidf, _} = Float.parse(bid)
     {askf, _} = Float.parse(ask)
     if type == "ASK" do
-      {:ok, calc_best_price(askf, askf, bidf, type)}
+      {:ok, calc_best_price(askf, askf, bidf, min_increment, type)}
     else
-      {:ok, calc_best_price(bidf, bidf, askf, type)}
+      {:ok, calc_best_price(bidf, bidf, askf, min_increment, type)}
     end
   end
-  defp calc_limit_order_price(pre_vol, curr_vol, type, %{order_price: curr_price, med_mod: req_mod, pair: pair}) do
+  defp calc_limit_order_price(
+         pre_vol,
+         curr_vol,
+         type,
+         %{order_price: curr_price, med_mod: req_mod, pair: pair, min_increment: min_increment}
+       ) do
     %{"asks" => asks, "bids" => bids} = req_mod.get_orderbook(pair)
     {type_orders, alt_orders} = if type == "ASK", do: {asks, bids}, else: {bids, asks}
     Enum.reduce_while(
@@ -290,7 +305,7 @@ defmodule CfLuno.Statem do
           )
           {best_pricef, _} = Float.parse(best_price)
           {best_alt_pricef, _} = Float.parse(best_alt_price)
-          new_price = calc_best_price(best_pricef, price, best_alt_pricef, type)
+          new_price = calc_best_price(best_pricef, price, best_alt_pricef, min_increment, type)
           {:halt, {:ok, new_price}}
         else
           {:cont, {new_acc_volume, rem_limit_vol}}
@@ -299,17 +314,17 @@ defmodule CfLuno.Statem do
     )
   end
 
-  defp calc_best_price(ask_price, ask_price, bid_price, "ASK") do
-    max(bid_price + 1, ask_price - 1)
+  defp calc_best_price(ask_price, ask_price, bid_price, min_increment, "ASK") do
+    max(bid_price + min_increment, ask_price - min_increment)
   end
-  defp calc_best_price(ask_price, order_price, _, "ASK") do
-    max(ask_price + 1, order_price) - 1
+  defp calc_best_price(ask_price, order_price, _, min_increment, "ASK") do
+    max(ask_price + min_increment, order_price) - min_increment
   end
-  defp calc_best_price(bid_price, bid_price, ask_price, "BID") do
-    min(ask_price - 1, bid_price + 1)
+  defp calc_best_price(bid_price, bid_price, ask_price, min_increment, "BID") do
+    min(ask_price - min_increment, bid_price + min_increment)
   end
-  defp calc_best_price(bid_price, order_price, _, "BID") do
-    min(bid_price - 1, order_price) + 1
+  defp calc_best_price(bid_price, order_price, _, min_increment, "BID") do
+    min(bid_price - min_increment, order_price) + min_increment
   end
 
   defp place_limit_order(
@@ -323,7 +338,8 @@ defmodule CfLuno.Statem do
        when old_price == new_price do
     traded_vol = med_mod.sum_trades(pair, old_ts, order_id)[type]
     [ts, rem_vol, alt_vol] = get_return_vlaues(traded_vol, new_vol, alt_vol, mode)
-    Logger.info("Keep limit order #{order_id} remaining volume #{rem_vol} at #{old_price}")
+    rem_vol_str = :erlang.float_to_binary(rem_vol, [{:decimals, 6}])
+    Logger.info("Keep limit order #{order_id} remaining volume #{rem_vol_str} at #{old_price}")
     {:ok, [ts, rem_vol, alt_vol, order_id]}
   end
   defp place_limit_order(
@@ -360,7 +376,7 @@ defmodule CfLuno.Statem do
   def cancel_orders(orders, med_mod) do
     Enum.each(
       orders,
-      fn (%{id: id, price: price}) ->
+      fn (%{"id" => id, "price" => price}) ->
         med_mod.stop_order(id, price)
       end
     )
