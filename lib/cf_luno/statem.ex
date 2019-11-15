@@ -38,8 +38,8 @@ defmodule CfLuno.Statem do
 
   def set_hodl_amt(asset, amount) do
     type = cond do
-      asset == "Primary" -> :prim_hodl_amt
-      asset == "Secondary" -> :sec_hodl_amt
+      asset == "primary" -> :prim_hodl_amt
+      asset == "secondary" -> :sec_hodl_amt
     end
     GenStateMachine.cast(__MODULE__, {:set_data, type, amount})
   end
@@ -81,7 +81,7 @@ defmodule CfLuno.Statem do
       oracle_queue: {queue, 0},
       oracle_ref: {oracle_price, datetime},
       pause: false,
-      order_id: 0,
+      order_id: nil,
       order_price: 0
     }
     new_data = Map.merge(data, init_data)
@@ -190,7 +190,7 @@ defmodule CfLuno.Statem do
       {:keep_state, new_data, [{:state_timeout, @review_time, {action, []}} | post_actions]}
     else
       Logger.warn("State change: :wait_stable")
-      {:next_state, :wait_stable, %{data | vol_key => 0}, [{:next_event, :internal, :cancel_orders}]}
+      {:next_state, :wait_stable, %{data | vol_key => 0, :order_price => 0}, []}
     end
 
   end
@@ -208,7 +208,7 @@ defmodule CfLuno.Statem do
     vol_sold = trades["ASK"]
     vol_bought = trades["BID"]
     new_data =
-      %{data | order_id: 0, order_price: 0, sell_amt: sell_amt - vol_sold, buy_amt: buy_amt - vol_bought}
+      %{data | order_id: nil, order_price: 0, sell_amt: sell_amt - vol_sold, buy_amt: buy_amt - vol_bought}
     {:keep_state, new_data}
   end
 
@@ -323,7 +323,7 @@ defmodule CfLuno.Statem do
        when old_price == new_price do
     traded_vol = med_mod.sum_trades(pair, old_ts, order_id)[type]
     [ts, rem_vol, alt_vol] = get_return_vlaues(traded_vol, new_vol, alt_vol, mode)
-    Logger.info("Limit order #{order_id} remaining volume #{rem_vol} at #{old_price}")
+    Logger.info("Keep limit order #{order_id} remaining volume #{rem_vol} at #{old_price}")
     {:ok, [ts, rem_vol, alt_vol, order_id]}
   end
   defp place_limit_order(
@@ -334,7 +334,7 @@ defmodule CfLuno.Statem do
          type,
          %{order_time: old_ts, order_price: old_price, order_id: order_id, mode: mode, med_mod: med_mod, pair: pair}
        ) do
-    order_id != 0 && med_mod.stop_order(order_id, old_price)
+    !is_nil(order_id) && med_mod.stop_order(order_id, old_price)
     traded_vol = med_mod.sum_trades(pair, old_ts, order_id)[type]
     [ts, rem_vol, alt_vol] = get_return_vlaues(traded_vol, new_vol, alt_vol, mode)
     prim_curr = String.slice(pair, 0..2)
