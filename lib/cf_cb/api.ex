@@ -32,13 +32,11 @@ defmodule CfCb.Api do
     |> invoke_public_api()
   end
 
-#  {
-#"size": "0.01",
-#"price": "0.100",
-#"side": "buy",
-#"product_id": "BTC-USD"
-#"post_only" : "true"
-# }
+  def place_order(params) do
+    body = Jason.encode(params)
+    "/orders"
+    |> invoke_private_api("POST")
+  end
 
   def cancel_order(order_id) do
     "/orders/" <> order_id
@@ -63,17 +61,17 @@ defmodule CfCb.Api do
   defp invoke_public_api(path) do
     Logger.debug("CB public api v1 path: #{inspect path}")
     @cb_uri <> path
-    |> HTTPoison.get(url)
+    |> HTTPoison.get()
   end
 
-  defp invoke_private_api(path, method) do
+  defp invoke_private_api(path, method, body \\ []) do
     url = @cb_uri <> path
     headers = get_auth_headers(method, path)
     Logger.debug("CB private api v1 url: #{inspect url}")
     case method do
       "GET" -> HTTPoison.get(url, headers, [])
       "DELETE" -> HTTPoison.delete(url, headers, [])
-      "POST" -> HTTPoison.post(url, [], headers, [])
+      "POST" -> HTTPoison.post(url, body, headers, [])
     end
   end
 
