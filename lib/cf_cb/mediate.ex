@@ -1,6 +1,5 @@
 defmodule CfCb.Mediate do
   require Logger
-  import String, only: [to_float: 1]
 
   def get_ticker(product_id) do
     {:ok, ticker} = CfCb.Api.get_ticker(product_id)
@@ -16,7 +15,7 @@ defmodule CfCb.Mediate do
   end
 
   def get_orderbook(product_id) do
-    {:ok, %{"bids" => bids, "asks" => asks}} = JsonUtils.retry_req(&CfCb.Api.get_orderbook_top/1,[product_id])
+    {:ok, %{"bids" => bids, "asks" => asks}} = JsonUtils.retry_req(&CfCb.Api.get_orderbook_top/1, [product_id])
     mediated_bids = mediate_order_book(tl(bids))
     mediated_asks = mediate_order_book(tl(asks))
     %{"bids" => mediated_bids, "asks" => mediated_asks}
@@ -27,7 +26,7 @@ defmodule CfCb.Mediate do
     side = if type == "ASK", do: "sell", else: "buy"
     Logger.info("Place limit #{type} for #{size_str} at #{price}")
     params = %{product_id: product_id, side: side, size: size_str, price: price, post_only: post_only}
-    {:ok, %{"id" => new_order_id}} = JsonUtils.retry_req(&CfCb.Api.post_order/1, [params])
+    {:ok, %{"id" => new_order_id}} = JsonUtils.retry_req(&CfCb.Api.place_order/1, [params])
     new_order_id
   end
 
@@ -37,12 +36,12 @@ defmodule CfCb.Mediate do
   end
 
   def list_open_orders(product_id) do
-    {:ok, orders} = JsonUtils.retry_req(&CfCb.Api.list_orders/1,[[product_id: product_id, status: "open"]])
+    {:ok, orders} = JsonUtils.retry_req(&CfCb.Api.list_orders/1, [[product_id: product_id, status: "open"]])
     orders
   end
 
   def list_trades(_product_id, _since, order_id) do
-    {:ok, fills} = JsonUtils.retry_req(&CfCb.Api.fills/1,[[order_id: order_id]])
+    {:ok, fills} = JsonUtils.retry_req(&CfCb.Api.fills/1, [[order_id: order_id]])
     get_traded_volume(fills)
   end
 
@@ -66,8 +65,12 @@ defmodule CfCb.Mediate do
       fills,
       [0, 0],
       fn
-        (%{"side" => "sell", "size" => volume}, [vol_ask, vol_bid]) -> [vol_ask + to_float(volume), vol_bid]
-        (%{"side" => "buy", "size" => volume}, [vol_ask, vol_bid]) -> [vol_ask, vol_bid + to_float(volume)]
+        (%{"side" => "sell", "size" => volume}, [vol_ask, vol_bid]) ->
+          {trade_vol, _rem_bin} = Float.parse(volume)
+          [vol_ask + trade_vol, vol_bid]
+        (%{"side" => "buy", "size" => volume}, [vol_ask, vol_bid]) ->
+          {trade_vol, _rem_bin} = Float.parse(volume)
+        [vol_ask, vol_bid + trade_vol]
       end
     )
     vol = %{"ASK" => ask, "BID" => bid}
