@@ -269,9 +269,9 @@ defmodule CfLuno.Statem do
     {bidf, _} = Float.parse(bid)
     {askf, _} = Float.parse(ask)
     if type == "ASK" do
-      {:ok, calc_best_price(askf, askf, bidf, min_increment, type)}
+      {:ok, calc_best_price(ask_int, ask_int, bid_int, type)}
     else
-      {:ok, calc_best_price(bidf, bidf, askf, min_increment, type)}
+      {:ok, calc_best_price(bid_int, bid_int, ask_int, type)}
     end
   end
   defp calc_limit_order_price(
