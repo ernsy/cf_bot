@@ -17,8 +17,8 @@ defmodule CfCb.Mediate do
 
   def get_orderbook(product_id) do
     {:ok, %{"bids" => bids, "asks" => asks}} = JsonUtils.retry_req(&CfCb.Api.get_orderbook_top/1, [product_id])
-    mediated_bids = mediate_order_book(tl(bids))
-    mediated_asks = mediate_order_book(tl(asks))
+    mediated_bids = mediate_order_book(bids)
+    mediated_asks = mediate_order_book(asks)
     %{"bids" => mediated_bids, "asks" => mediated_asks}
   end
 
