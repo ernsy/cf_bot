@@ -8,8 +8,9 @@ defmodule CfCb.Mediate do
 
   def get_avail_bal(currency) do
     {:ok, accounts} = JsonUtils.retry_req(&CfCb.Api.get_accounts/0, [])
-    account = Enum.find(accounts, fn (%{"currency" => acc_curr} = account) -> acc_curr == currency end)
-    {avail_bal, _rem_bin} = Float.parse(account["available"])
+    %{"available" => avail_str} =
+      Enum.find(accounts, fn (%{"currency" => acc_curr} = account) -> acc_curr == currency end)
+    {avail_bal, _rem_bin} = Float.parse(avail_str)
     Logger.info("Available #{currency} balance: #{avail_bal}")
     avail_bal
   end
@@ -23,9 +24,10 @@ defmodule CfCb.Mediate do
 
   def post_order(product_id, type, size, price, post_only) do
     size_str = :erlang.float_to_binary(size, [{:decimals, 6}])
+    price_str = :erlang.float_to_binary(price, [{:decimals, 2}])
     side = if type == "ASK", do: "sell", else: "buy"
     Logger.info("Place limit #{type} for #{size_str} at #{price}")
-    params = %{product_id: product_id, side: side, size: size_str, price: price, post_only: post_only}
+    params = %{product_id: product_id, side: side, size: size_str, price: price_str, post_only: post_only}
     {:ok, %{"id" => new_order_id}} = JsonUtils.retry_req(&CfCb.Api.place_order/1, [params])
     new_order_id
   end
@@ -40,6 +42,7 @@ defmodule CfCb.Mediate do
     orders
   end
 
+  def sum_trades(_product_id, _since, nil), do: %{"ASK" => 0, "BID" => 0}
   def sum_trades(_product_id, _since, order_id) do
     {:ok, fills} = JsonUtils.retry_req(&CfCb.Api.fills/1, [[order_id: order_id]])
     get_traded_volume(fills)
@@ -70,7 +73,7 @@ defmodule CfCb.Mediate do
           [vol_ask + trade_vol, vol_bid]
         (%{"side" => "buy", "size" => volume}, [vol_ask, vol_bid]) ->
           {trade_vol, _rem_bin} = Float.parse(volume)
-        [vol_ask, vol_bid + trade_vol]
+          [vol_ask, vol_bid + trade_vol]
       end
     )
     vol = %{"ASK" => ask, "BID" => bid}

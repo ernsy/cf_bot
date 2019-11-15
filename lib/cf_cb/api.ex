@@ -32,10 +32,10 @@ defmodule CfCb.Api do
     |> invoke_public_api()
   end
 
-  def place_order(params) do
-    body = Jason.encode(params)
+  def place_order(%{side: _, product_id: _} = params) do
+    {:ok, body} = Jason.encode(params)
     "/orders"
-    |> invoke_private_api("POST")
+    |> invoke_private_api("POST", body)
   end
 
   def cancel_order(order_id) do
@@ -64,9 +64,9 @@ defmodule CfCb.Api do
     |> HTTPoison.get()
   end
 
-  defp invoke_private_api(path, method, body \\ []) do
+  defp invoke_private_api(path, method, body \\ "") do
     url = @cb_uri <> path
-    headers = get_auth_headers(method, path)
+    headers = get_auth_headers(method, path, body)
     Logger.debug("CB private api v1 url: #{inspect url}")
     case method do
       "GET" -> HTTPoison.get(url, headers, [])
@@ -75,7 +75,7 @@ defmodule CfCb.Api do
     end
   end
 
-  defp get_auth_headers(method, url_path, body \\ "") do
+  defp get_auth_headers(method, url_path, body) do
     key = System.get_env("cb_api_key")
     {:ok, secret} = System.get_env("cb_api_secret")
                     |> Base.decode64
