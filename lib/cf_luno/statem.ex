@@ -2,7 +2,6 @@ defmodule CfLuno.Statem do
   require Logger
 
   use GenStateMachine
-  import String, only: [to_float: 1]
 
   @dt_perc 0.0025
   @ut_perc 0.0025
@@ -65,7 +64,7 @@ defmodule CfLuno.Statem do
         data
       _ ->
         prim_curr = String.slice(pair, 0..2)
-        sec_curr = String.slice(pair,-3, 3)
+        sec_curr = String.slice(pair, -3, 3)
         %{
           sell_amt: 0,
           prim_hodl_amt: med_mod.get_avail_bal(prim_curr),
@@ -112,7 +111,8 @@ defmodule CfLuno.Statem do
         :cast,
         {:oracle_update, %{"price" => price, "time" => time}},
         state,
-        %{oracle_queue: {queue, length},
+        %{
+          oracle_queue: {queue, length},
           sell_amt: sell_amt,
           buy_amt: buy_amt,
           prim_hodl_amt: hodl_amt,
@@ -256,8 +256,8 @@ defmodule CfLuno.Statem do
   defp calc_limit_order_price(0, _curr_limit_vol, type, %{med_mod: med_mod, pair: pair}) do
     %{"bid" => bid, "ask" => ask} = med_mod.get_ticker(pair)
     Logger.info("Bid price:" <> bid <> " ask price:" <> ask)
-    {bidf, _rem_bin} = Float.parse(bid)
-    {askf, _rem_bin} = Float.parse(ask)
+    {bidf, _} = Float.parse(bid)
+    {askf, _} = Float.parse(ask)
     if type == "ASK" do
       {:ok, calc_best_price(askf, askf, bidf, type)}
     else
@@ -271,8 +271,8 @@ defmodule CfLuno.Statem do
       type_orders,
       {0, curr_vol},
       fn (%{"volume" => volume_str, "price" => price_str}, {acc_volume, curr_vol}) ->
-        volume = to_float(volume_str)
-        {price, _rem_bin} = Float.parse(price_str)
+        {volume, _} = Float.parse(volume_str)
+        {price, _} = Float.parse(price_str)
         {new_acc_volume, rem_limit_vol} =
           if curr_vol > 0 and ((type == "ASK" and price >= curr_price) or (type == "BID" and price <= curr_price)) do
             new_acc_volume = acc_volume + volume - curr_vol
@@ -338,7 +338,7 @@ defmodule CfLuno.Statem do
     traded_vol = med_mod.sum_trades(pair, old_ts, order_id)[type]
     [ts, rem_vol, alt_vol] = get_return_vlaues(traded_vol, new_vol, alt_vol, mode)
     prim_curr = String.slice(pair, 0..2)
-    sec_curr = String.slice(pair,-3, 3)
+    sec_curr = String.slice(pair, -3, 3)
     bal = if type == "ASK", do: med_mod.get_avail_bal(prim_curr), else: med_mod.get_avail_bal(sec_curr)
     if bal > hodl_amt and rem_vol >= @min_order_vol do
       new_order_id = med_mod.post_order(pair, type, rem_vol, new_price, "true")
