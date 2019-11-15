@@ -160,7 +160,7 @@ defmodule CfLuno.Statem do
     end
   end
 
-  def handle_event(event_type, {action, post_actions}, state, data)
+  def handle_event(event_type, {action, post_actions}, state, %{mode: mode} = data)
       when
         (event_type == :internal or event_type == :state_timeout) and (action == :limit_sell or action == :limit_buy) do
     [vol_key, alt_vol_key, hodl_amt_key, type] =
@@ -189,8 +189,13 @@ defmodule CfLuno.Statem do
       :ok = :dets.insert(:disk_storage, {:data, new_data})
       {:keep_state, new_data, [{:state_timeout, @review_time, {action, []}} | post_actions]}
     else
-      Logger.warn("State change: :wait_stable")
-      {:next_state, :wait_stable, %{data | vol_key => 0, :order_price => 0}, []}
+      next_state = if mode == "hodl" do
+        Logger.warn("State change: :wait_stable")
+        :wait_stable
+      else
+        state
+      end
+      {:next_state, :wait_stable, %{data | vol_key => 0, :order_price => 0}, [{:next_event, :internal, :cancel_orders}]}
     end
 
   end
