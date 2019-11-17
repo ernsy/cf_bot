@@ -3,12 +3,12 @@ defmodule CfLuno.Statem do
 
   use GenStateMachine
 
-  @dt_perc 0.0025
-  @ut_perc 0.0025
+  @dt_perc 0.0015
+  @ut_perc 0.0015
   @stable_perc 0.0002
-  @min_order_vol 0.0005
+  @min_order_vol 0.001
 
-  @review_time 2000
+  @review_time 400
   @trade_delta_sec 60
 
   #---------------------------------------------------------------------------------------------------------------------
@@ -195,7 +195,7 @@ defmodule CfLuno.Statem do
       else
         state
       end
-      {:next_state, :wait_stable, %{data | vol_key => 0, :order_price => 0}, [{:next_event, :internal, :cancel_orders}]}
+      {:next_state, next_state, %{data | vol_key => 0, :order_price => 0}, [{:next_event, :internal, :cancel_orders}]}
     end
 
   end
