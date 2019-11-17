@@ -9,7 +9,7 @@ defmodule CfCb.Mediate do
   def get_avail_bal(currency) do
     {:ok, accounts} = JsonUtils.retry_req(&CfCb.Api.get_accounts/0, [])
     %{"available" => avail_str} =
-      Enum.find(accounts, fn (%{"currency" => acc_curr} = account) -> acc_curr == currency end)
+      Enum.find(accounts, fn (%{"currency" => acc_curr}) -> acc_curr == currency end)
     {avail_bal, _rem_bin} = Float.parse(avail_str)
     Logger.info("Available #{currency} balance: #{avail_bal}")
     avail_bal

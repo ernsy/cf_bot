@@ -3,12 +3,11 @@ defmodule CfLuno.Statem do
 
   use GenStateMachine
 
-  @dt_perc 0.0025
-  @ut_perc 0.0025
+  @dt_perc 0.0015
+  @ut_perc 0.0015
   @stable_perc 0.0002
-  @min_order_vol 0.0005
+  @min_order_vol 0.001
 
-  @review_time 2000
   @trade_delta_sec 60
 
   #---------------------------------------------------------------------------------------------------------------------
@@ -55,7 +54,7 @@ defmodule CfLuno.Statem do
   # callbacks
   #---------------------------------------------------------------------------------------------------------------------
 
-  def init(%{med_mod: med_mod, pair: pair, oracle_pair: oracle_pair, min_increment: _} = init_args) do
+  def init(%{med_mod: med_mod, pair: pair, oracle_pair: oracle_pair, min_increment: _, review_time: _} = init_args) do
     orders = med_mod.list_open_orders(pair)
     :ok = cancel_orders(orders, med_mod)
     {:ok, :disk_storage} = :dets.open_file(:disk_storage, [type: :set])
@@ -160,7 +159,7 @@ defmodule CfLuno.Statem do
     end
   end
 
-  def handle_event(event_type, {action, post_actions}, state, %{mode: mode} = data)
+  def handle_event(event_type, {action, post_actions}, state, %{mode: mode, review_time: review_time} = data)
       when
         (event_type == :internal or event_type == :state_timeout) and (action == :limit_sell or action == :limit_buy) do
     [vol_key, alt_vol_key, hodl_amt_key, type] =
@@ -187,7 +186,7 @@ defmodule CfLuno.Statem do
           :order_price => new_price
         }
       :ok = :dets.insert(:disk_storage, {:data, new_data})
-      {:keep_state, new_data, [{:state_timeout, @review_time, {action, []}} | post_actions]}
+      {:keep_state, new_data, [{:state_timeout, review_time, {action, []}} | post_actions]}
     else
       next_state = if mode == "hodl" do
         Logger.warn("State change: :wait_stable")
@@ -195,7 +194,7 @@ defmodule CfLuno.Statem do
       else
         state
       end
-      {:next_state, :wait_stable, %{data | vol_key => 0, :order_price => 0}, [{:next_event, :internal, :cancel_orders}]}
+      {:next_state, next_state, %{data | vol_key => 0, :order_price => 0}, [{:next_event, :internal, :cancel_orders}]}
     end
 
   end
