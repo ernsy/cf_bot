@@ -2,7 +2,7 @@ defmodule JsonUtils do
   require Logger
 
   @max_req_per_minute 60
-  @retry_count (60 / @max_req_per_minute)
+  @retry_count 3
 
   def retry_req(req_fun, params, retry_count \\ @retry_count)
   def retry_req(req_fun, params, 1) do
