@@ -1,7 +1,7 @@
 defmodule JsonUtils do
   require Logger
 
-  @max_req_per_minute 60
+  @sleep_time 1000
   @retry_count 3
 
   def retry_req(req_fun, params, retry_count \\ @retry_count)
@@ -23,7 +23,7 @@ defmodule JsonUtils do
   end
 
   defp sleep_and_retry(req_fun, params, retry_count)  do
-    Process.sleep(round(60000 / @max_req_per_minute))
+    Process.sleep(round(@sleep_time))
     retry_req(req_fun, params, retry_count - 1)
   end
 
