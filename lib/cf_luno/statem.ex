@@ -350,6 +350,7 @@ defmodule CfLuno.Statem do
          %{order_time: old_ts, order_price: old_price, order_id: order_id, mode: mode, med_mod: med_mod, pair: pair}
        ) do
     !is_nil(order_id) && med_mod.stop_order(order_id, old_price)
+     Process.sleep(200) #wait for balance to update after cancelling order
     traded_vol = med_mod.sum_trades(pair, old_ts, order_id)[type]
     [ts, rem_vol, alt_vol] = get_return_vlaues(traded_vol, new_vol, alt_vol, mode)
     prim_curr = String.slice(pair, 0..2)
