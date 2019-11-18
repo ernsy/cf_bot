@@ -33,3 +33,5 @@ config :logger,
 config :logger, :console,
        level: :info,
        metadata: [:module, :line, :function]
+
+config :cf_luno, :cb_uri, "https://api.pro.coinbase.com"

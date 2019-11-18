@@ -47,7 +47,6 @@ defmodule CfCb.Mediate do
         %{order_id: id, order_price: price, order_time: ts}
       end
     )
-    orders
   end
 
   def sum_trades(_product_id, _since, nil), do: %{"ASK" => 0, "BID" => 0}

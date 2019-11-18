@@ -23,5 +23,8 @@ use Mix.Config
 # tell logger to load a LoggerFileBackend processes
 config :logger,
        backends: [:console]
-config :logger, :console,
+config :logger,
+       :console,
+       level: :info,
        metadata: [:module, :line, :function]
+config :cf_luno, :cb_uri, "https://api-public.sandbox.pro.coinbase.com"
