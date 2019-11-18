@@ -1,6 +1,5 @@
 defmodule CfCb.Mediate do
   require Logger
-  import String, only: [to_float: 1]
 
   def get_ticker(product_id) do
     {:ok, ticker} = CfCb.Api.get_ticker(product_id)
@@ -8,32 +7,41 @@ defmodule CfCb.Mediate do
   end
 
   def get_avail_bal(currency) do
-    {:ok, accounts} = CfCb.Api.get_accounts()
-    account = Enum.find(accounts, fn (%{"currency" => acc_curr} = account) when acc_curr == currency -> account end)
-    avail_bal = to_float(account["available"])
+    {:ok, accounts} = JsonUtils.retry_req(&CfCb.Api.get_accounts/0, [])
+    account = Enum.find(accounts, fn (%{"currency" => acc_curr} = account) -> acc_curr == currency end)
+    {avail_bal, _rem_bin} = Float.parse(account["available"])
     Logger.info("Available #{currency} balance: #{avail_bal}")
     avail_bal
   end
 
   def get_orderbook(product_id) do
-    {:ok, %{"bids" => bids, "asks" => asks}} = CfCb.Api.get_orderbook_top(product_id)
+    {:ok, %{"bids" => bids, "asks" => asks}} = JsonUtils.retry_req(&CfCb.Api.get_orderbook_top/1, [product_id])
     mediated_bids = mediate_order_book(tl(bids))
     mediated_asks = mediate_order_book(tl(asks))
     %{"bids" => mediated_bids, "asks" => mediated_asks}
   end
 
+  def post_order(product_id, type, size, price, post_only) do
+    size_str = :erlang.float_to_binary(size, [{:decimals, 6}])
+    side = if type == "ASK", do: "sell", else: "buy"
+    Logger.info("Place limit #{type} for #{size_str} at #{price}")
+    params = %{product_id: product_id, side: side, size: size_str, price: price, post_only: post_only}
+    {:ok, %{"id" => new_order_id}} = JsonUtils.retry_req(&CfCb.Api.place_order/1, [params])
+    new_order_id
+  end
+
   def stop_order(order_id, price) do
     Logger.info("Cancel limit order #{order_id} at #{price}")
-    CfCb.cancel_order(order_id)
+    CfCb.Api.cancel_order(order_id)
   end
 
   def list_open_orders(product_id) do
-    {:ok, orders} = CfCb.Api.list_orders([product_id: product_id, status: "open"])
+    {:ok, orders} = JsonUtils.retry_req(&CfCb.Api.list_orders/1, [[product_id: product_id, status: "open"]])
     orders
   end
 
-  def list_trades(_product_id, _since, order_id) do
-    {:ok, fills} = CfCb.Api.fills([order_id: order_id])
+  def sum_trades(_product_id, _since, order_id) do
+    {:ok, fills} = JsonUtils.retry_req(&CfCb.Api.fills/1, [[order_id: order_id]])
     get_traded_volume(fills)
   end
 
@@ -57,8 +65,12 @@ defmodule CfCb.Mediate do
       fills,
       [0, 0],
       fn
-        (%{"side" => "sell", "size" => volume}, [vol_ask, vol_bid]) -> [vol_ask + to_float(volume), vol_bid]
-        (%{"side" => "buy", "size" => volume}, [vol_ask, vol_bid]) -> [vol_ask, vol_bid + to_float(volume)]
+        (%{"side" => "sell", "size" => volume}, [vol_ask, vol_bid]) ->
+          {trade_vol, _rem_bin} = Float.parse(volume)
+          [vol_ask + trade_vol, vol_bid]
+        (%{"side" => "buy", "size" => volume}, [vol_ask, vol_bid]) ->
+          {trade_vol, _rem_bin} = Float.parse(volume)
+        [vol_ask, vol_bid + trade_vol]
       end
     )
     vol = %{"ASK" => ask, "BID" => bid}

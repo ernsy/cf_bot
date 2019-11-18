@@ -2,7 +2,6 @@ defmodule CfLuno.Statem do
   require Logger
 
   use GenStateMachine
-  import String, only: [to_float: 1]
 
   @dt_perc 0.0025
   @ut_perc 0.0025
@@ -65,7 +64,7 @@ defmodule CfLuno.Statem do
         data
       _ ->
         prim_curr = String.slice(pair, 0..2)
-        sec_curr = String.slice(pair,-3, 3)
+        sec_curr = String.slice(pair, -3, 3)
         %{
           sell_amt: 0,
           prim_hodl_amt: med_mod.get_avail_bal(prim_curr),
@@ -112,7 +111,8 @@ defmodule CfLuno.Statem do
         :cast,
         {:oracle_update, %{"price" => price, "time" => time}},
         state,
-        %{oracle_queue: {queue, length},
+        %{
+          oracle_queue: {queue, length},
           sell_amt: sell_amt,
           buy_amt: buy_amt,
           prim_hodl_amt: hodl_amt,
@@ -191,7 +191,7 @@ defmodule CfLuno.Statem do
     else
       next_state = if mode == "hodl", do: :wait_stable, else: state
       Logger.warn("State change: #{next_state}")
-      {:next_state, :wait_stable, %{data | vol_key => 0, :order_price => 0}, []}
+      {:next_state, next_state, %{data | vol_key => 0}, []}
     end
 
   end
@@ -257,12 +257,12 @@ defmodule CfLuno.Statem do
   defp calc_limit_order_price(0, _curr_limit_vol, type, %{med_mod: med_mod, pair: pair}) do
     %{"bid" => bid, "ask" => ask} = med_mod.get_ticker(pair)
     Logger.info("Bid price:" <> bid <> " ask price:" <> ask)
-    {bid_int, _rem_bin} = Integer.parse(bid)
-    {ask_int, _rem_bin} = Integer.parse(ask)
+    {bidf, _} = Float.parse(bid)
+    {askf, _} = Float.parse(ask)
     if type == "ASK" do
-      {:ok, calc_best_price(ask_int, ask_int, bid_int, type)}
+      {:ok, calc_best_price(askf, askf, bidf, type)}
     else
-      {:ok, calc_best_price(bid_int, bid_int, ask_int, type)}
+      {:ok, calc_best_price(bidf, bidf, askf, type)}
     end
   end
   defp calc_limit_order_price(pre_vol, curr_vol, type, %{order_price: curr_price, med_mod: req_mod, pair: pair}) do
@@ -272,8 +272,8 @@ defmodule CfLuno.Statem do
       type_orders,
       {0, curr_vol},
       fn (%{"volume" => volume_str, "price" => price_str}, {acc_volume, curr_vol}) ->
-        volume = to_float(volume_str)
-        {price, _rem_bin} = Integer.parse(price_str)
+        {volume, _} = Float.parse(volume_str)
+        {price, _} = Float.parse(price_str)
         {new_acc_volume, rem_limit_vol} =
           if curr_vol > 0 and ((type == "ASK" and price >= curr_price) or (type == "BID" and price <= curr_price)) do
             new_acc_volume = acc_volume + volume - curr_vol
@@ -289,9 +289,9 @@ defmodule CfLuno.Statem do
             "Best price:" <> best_price <> ", volume:" <> best_vol
             <> ". Best alt price:" <> best_alt_price <> ", volume:" <> best_alt_vol
           )
-          {best_price_int, _} = Integer.parse(best_price)
-          {best_alt_price_int, _} = Integer.parse(best_alt_price)
-          new_price = calc_best_price(best_price_int, price, best_alt_price_int, type)
+          {best_pricef, _} = Float.parse(best_price)
+          {best_alt_pricef, _} = Float.parse(best_alt_price)
+          new_price = calc_best_price(best_pricef, price, best_alt_pricef, type)
           {:halt, {:ok, new_price}}
         else
           {:cont, {new_acc_volume, rem_limit_vol}}
@@ -336,11 +336,11 @@ defmodule CfLuno.Statem do
          %{order_time: old_ts, order_price: old_price, order_id: order_id, mode: mode, med_mod: med_mod, pair: pair}
        ) do
     !is_nil(order_id) && med_mod.stop_order(order_id, old_price)
-    Process.sleep(200)
+     Process.sleep(200) #wait for balance to update after cancelling order
     traded_vol = med_mod.sum_trades(pair, old_ts, order_id)[type]
     [ts, rem_vol, alt_vol] = get_return_vlaues(traded_vol, new_vol, alt_vol, mode)
     prim_curr = String.slice(pair, 0..2)
-    sec_curr = String.slice(pair,-3, 3)
+    sec_curr = String.slice(pair, -3, 3)
     bal = if type == "ASK", do: med_mod.get_avail_bal(prim_curr), else: med_mod.get_avail_bal(sec_curr)
     if bal > hodl_amt and rem_vol >= @min_order_vol do
       new_order_id = med_mod.post_order(pair, type, rem_vol, new_price, "true")

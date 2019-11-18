@@ -71,15 +71,15 @@ defmodule CfLuno.Api do
   defp invoke_public_api_v1(path) do
     url = @luno_url_v1 <> path
     Logger.debug("public api v1 url: #{inspect url}")
-    JsonUtils.retry_req(&HTTPoison.get/1, url)
+    JsonUtils.retry_req(&HTTPoison.get/1, [url])
   end
 
   defp invoke_private_api_v1_get(path) do
-    JsonUtils.retry_req(&do_invoke_private_api_v1_get/1, path)
+    JsonUtils.retry_req(&do_invoke_private_api_v1_get/1, [path])
   end
 
   defp invoke_private_api_v1_post(path) do
-    JsonUtils.retry_req(&do_invoke_private_api_v1_post/1, path)
+    JsonUtils.retry_req(&do_invoke_private_api_v1_post/1, [path])
   end
 
   defp do_invoke_private_api_v1_get(path) do

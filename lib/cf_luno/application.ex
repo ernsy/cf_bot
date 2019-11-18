@@ -9,7 +9,8 @@ defmodule CfLuno.Application do
     children = [
       # Starts a worker by calling: CfLuno.Worker.start_link(arg)
       # {CfLuno.Worker, arg}
-      {CfLuno.Statem, %{med_mod: CfLuno.Mediate, pair: "XBTZAR", oracle_pair: "BTC-USD"}},
+      #{CfLuno.Statem, %{med_mod: CfLuno.Mediate, pair: "XBTZAR", oracle_pair: "BTC-USD"}},
+      {CfLuno.Statem, %{med_mod: CfCb.Mediate, pair: "BTC-USD", oracle_pair: "BTC-USD"}},
       {CfCb.WsClient, {["BTC-USD"], &CfLuno.Statem.oracle_update/1}}
     ]
 

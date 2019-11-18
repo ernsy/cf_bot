@@ -6,11 +6,11 @@ defmodule JsonUtils do
 
   def retry_req(req_fun, params, retry_count \\ @retry_count)
   def retry_req(req_fun, params, 1) do
-    req_fun.(params)
+    apply(req_fun, params)
     |> decode_json_response()
   end
   def retry_req(req_fun, params, retry_count) do
-    http_resp = req_fun.(params)
+    http_resp = apply(req_fun, params)
     case decode_json_response(http_resp) do
       {:error, {status_code, body}} when status_code == 429 or status_code == 500 ->
         Logger.warn("Response: {#{inspect status_code}, #{inspect body}}")
