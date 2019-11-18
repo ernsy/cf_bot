@@ -3,8 +3,8 @@ defmodule CfLuno.Statem do
 
   use GenStateMachine
 
-  @dt_perc 0.0015
-  @ut_perc 0.0015
+  @dt_perc 0.002
+  @ut_perc 0.002
   @stable_perc 0.0002
   @min_order_vol 0.001
 
