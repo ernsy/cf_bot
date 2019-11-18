@@ -2,7 +2,7 @@ defmodule CfCb.Mediate do
   require Logger
 
   def get_ticker(product_id) do
-    {:ok, ticker} = CfCb.Api.get_ticker(product_id)
+    {:ok, ticker} = JsonUtils.retry_req(&CfCb.Api.get_ticker/1,[product_id])
     ticker
   end
 
@@ -39,6 +39,14 @@ defmodule CfCb.Mediate do
 
   def list_open_orders(product_id) do
     {:ok, orders} = JsonUtils.retry_req(&CfCb.Api.list_orders/1, [[product_id: product_id, status: "open"]])
+    orders && Enum.map(
+      orders,
+      fn (%{"id" => id, "price" => price,  "created_at" => datetime_str}) ->
+        {:ok, datetime, _} = DateTime.from_iso8601(datetime_str)
+        ts = DateTime.to_unix(datetime)
+        %{order_id: id, order_price: price, order_time: ts}
+      end
+    )
     orders
   end
 

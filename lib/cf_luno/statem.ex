@@ -54,12 +54,10 @@ defmodule CfLuno.Statem do
   # callbacks
   #---------------------------------------------------------------------------------------------------------------------
 
-  def init(%{med_mod: med_mod, pair: pair, oracle_pair: oracle_pair, min_increment: _, review_time: _} = init_args) do
-    orders = med_mod.list_open_orders(pair)
-    :ok = cancel_orders(orders, med_mod)
+  def init(%{med_mod: med_mod, pair: pair, oracle_pair: oracle_pair, min_increment: _, review_time: _} = init_map) do
     {:ok, :disk_storage} = :dets.open_file(:disk_storage, [type: :set])
     data = case :dets.lookup(:disk_storage, :data) do
-      [data: %{sell_amt: _, prim_hodl_amt: _, buy_amt: _, sec_hodl_amt: _, order_time: _, mode: _} = data] ->
+      [data: %{sell_amt: _, prim_hodl_amt: _, buy_amt: _, sec_hodl_amt: _, mode: _} = data] ->
         data
       _ ->
         prim_curr = String.slice(pair, 0..2)
@@ -69,9 +67,16 @@ defmodule CfLuno.Statem do
           prim_hodl_amt: med_mod.get_avail_bal(prim_curr),
           buy_amt: 0,
           sec_hodl_amt: med_mod.get_avail_bal(sec_curr),
-          order_time: :erlang.system_time(:millisecond),
           mode: "manual"
         }
+    end
+    orders = med_mod.list_open_orders(pair)
+    order_length = length(orders)
+    order_map = if  order_length == 1 do
+      hd(orders)
+    else
+      cancel_orders(orders, med_mod)
+      %{}
     end
     {:ok, [oracle_price, datetime]} = get_oracle_price(oracle_pair)
     queue = :queue.new
@@ -80,10 +85,12 @@ defmodule CfLuno.Statem do
       oracle_ref: {oracle_price, datetime},
       pause: false,
       order_id: nil,
-      order_price: 0
+      order_price: 0,
+      order_time: :erlang.system_time(:millisecond)
     }
     new_data = Map.merge(data, init_data)
-               |> Map.merge(init_args)
+               |> Map.merge(init_map)
+               |> Map.merge(order_map)
     Logger.info("Init data:#{inspect new_data}")
     {:ok, :wait_stable, new_data}
   end
@@ -189,11 +196,11 @@ defmodule CfLuno.Statem do
       {:keep_state, new_data, [{:state_timeout, review_time, {action, []}} | post_actions]}
     else
       next_state = if mode == "hodl" do
-        Logger.warn("State change: :wait_stable")
         :wait_stable
       else
         state
       end
+      Logger.warn("Volume below minimum, next state: #{next_state}")
       {:next_state, next_state, %{data | vol_key => 0, :order_price => 0}, [{:next_event, :internal, :cancel_orders}]}
     end
 
@@ -211,8 +218,11 @@ defmodule CfLuno.Statem do
     trades = mod.sum_trades(pair, order_ts, id)
     vol_sold = trades["ASK"]
     vol_bought = trades["BID"]
+    new_sell_amt = sell_amt - vol_sold
+    new_buy_amt = buy_amt - vol_bought
+    new_ts = :erlang.system_time(:millisecond)
     new_data =
-      %{data | order_id: nil, order_price: 0, sell_amt: sell_amt - vol_sold, buy_amt: buy_amt - vol_bought}
+      %{data | order_id: nil, order_price: 0, sell_amt: new_sell_amt, buy_amt: new_buy_amt, order_time: new_ts}
     {:keep_state, new_data}
   end
 
@@ -350,7 +360,7 @@ defmodule CfLuno.Statem do
          %{order_time: old_ts, order_price: old_price, order_id: order_id, mode: mode, med_mod: med_mod, pair: pair}
        ) do
     !is_nil(order_id) && med_mod.stop_order(order_id, old_price)
-     Process.sleep(200) #wait for balance to update after cancelling order
+    Process.sleep(200) #wait for balance to update after cancelling order
     traded_vol = med_mod.sum_trades(pair, old_ts, order_id)[type]
     [ts, rem_vol, alt_vol] = get_return_vlaues(traded_vol, new_vol, alt_vol, mode)
     prim_curr = String.slice(pair, 0..2)
@@ -375,7 +385,7 @@ defmodule CfLuno.Statem do
   def cancel_orders(orders, med_mod) do
     Enum.each(
       orders,
-      fn (%{"id" => id, "price" => price}) ->
+      fn (%{order_id: id, order_price: price}) ->
         med_mod.stop_order(id, price)
       end
     )
