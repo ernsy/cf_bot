@@ -71,7 +71,7 @@ defmodule CfLuno.Statem do
         }
     end
     orders = med_mod.list_open_orders(pair)
-    order_length = length(orders)
+    order_length = orders && length(orders)
     order_map = if  order_length == 1 do
       hd(orders)
     else
