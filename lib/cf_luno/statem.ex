@@ -62,22 +62,13 @@ defmodule CfLuno.Statem do
       _ ->
         prim_curr = String.slice(pair, 0..2)
         sec_curr = String.slice(pair, -3, 3)
-        %{
-          sell_amt: 0,
-          prim_hodl_amt: med_mod.get_avail_bal(prim_curr),
-          buy_amt: 0,
-          sec_hodl_amt: med_mod.get_avail_bal(sec_curr),
-          mode: "manual"
-        }
+        prim_hodl_amt = med_mod.get_avail_bal(prim_curr)
+        sec_hodl_amt = med_mod.get_avail_bal(sec_curr)
+        %{sell_amt: 0, prim_hodl_amt: prim_hodl_amt, buy_amt: 0, sec_hodl_amt: sec_hodl_amt, mode: "manual"}
     end
     orders = med_mod.list_open_orders(pair)
     order_length = length(orders)
-    order_map = if  order_length == 1 do
-      hd(orders)
-    else
-      cancel_orders(orders, med_mod)
-      %{}
-    end
+    order_map = if order_length == 1, do: hd(orders), else: cancel_orders(orders, med_mod)
     {:ok, [oracle_price, datetime]} = get_oracle_price(oracle_pair)
     queue = :queue.new
     init_data = %{
@@ -201,7 +192,7 @@ defmodule CfLuno.Statem do
         state
       end
       Logger.warn("Volume below minimum, next state: #{next_state}")
-      {:next_state, next_state, %{data | vol_key => 0, :order_price => 0}, [{:next_event, :internal, :cancel_orders}]}
+      {:next_state, next_state, %{data | vol_key => 0, :order_price => 0}, []}
     end
 
   end
@@ -214,7 +205,7 @@ defmodule CfLuno.Statem do
         = data
       ) do
     orders = mod.list_open_orders(pair)
-    :ok = cancel_orders(orders, mod)
+    %{} = cancel_orders(orders, mod)
     trades = mod.sum_trades(pair, order_ts, id)
     vol_sold = trades["ASK"]
     vol_bought = trades["BID"]
@@ -381,7 +372,7 @@ defmodule CfLuno.Statem do
     [ts, rem_vol, alt_vol]
   end
 
-  def cancel_orders(nil, _mod), do: :ok
+  def cancel_orders(nil, _mod), do: %{}
   def cancel_orders(orders, med_mod) do
     Enum.each(
       orders,
@@ -389,6 +380,7 @@ defmodule CfLuno.Statem do
         med_mod.stop_order(id, price)
       end
     )
+    %{}
   end
 
 end
