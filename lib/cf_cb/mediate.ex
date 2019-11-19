@@ -51,7 +51,8 @@ defmodule CfCb.Mediate do
       fn (%{"id" => id, "price" => price, "created_at" => datetime_str}) ->
         {:ok, datetime, _} = DateTime.from_iso8601(datetime_str)
         ts = DateTime.to_unix(datetime)
-        %{order_id: id, order_price: price, order_time: ts}
+        {pricef, _} = Float.parse(price)
+        %{order_id: id, order_price: pricef, order_time: ts}
       end
     )
   end
