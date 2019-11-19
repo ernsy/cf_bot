@@ -27,6 +27,11 @@ defmodule CfCb.Api do
     |> invoke_private_api("GET")
   end
 
+  def get_fees() do
+    "/fees"
+    |> invoke_private_api("GET")
+  end
+
   def get_orderbook_top(product_id) do
     "/products/" <> product_id <> "/book?level=2"
     |> invoke_public_api()
@@ -48,7 +53,7 @@ defmodule CfCb.Api do
     |> invoke_private_api("GET")
   end
 
-  def fills(params) do
+  def get_fills(params) do
     "/fills?" <> URI.encode_query(params)
     |> invoke_private_api("GET")
   end
