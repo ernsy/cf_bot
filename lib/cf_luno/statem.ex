@@ -3,8 +3,8 @@ defmodule CfLuno.Statem do
 
   use GenStateMachine
 
-  @dt_perc 0.002
-  @ut_perc 0.002
+  @dt_perc 0.0015
+  @ut_perc 0.0015
   @stable_perc 0.0002
   @min_order_vol 0.001
 
@@ -159,7 +159,7 @@ defmodule CfLuno.Statem do
             sec_curr = String.slice(pair, -3, 3)
             {bid_price, _} = med_mod.get_ticker(pair)["bid"]
                              |> Float.parse()
-            med_mod.get_avail_bal(sec_curr) / ((bid_price + min_increment) * (1 + fee))
+            (med_mod.get_avail_bal(sec_curr) - hodl_amt) / ((bid_price + min_increment) * (1 + fee))
           else
             buy_amt
           end
@@ -388,7 +388,8 @@ defmodule CfLuno.Statem do
         [med_mod.get_avail_bal(prim_curr), rem_vol]
       else
         bal = med_mod.get_avail_bal(sec_curr)
-        [bal, bal / ((new_price + min_incr) * (1 + fee))]
+        adj_rem_vol = min(rem_vol, (bal - hodl_amt) / ((new_price + min_incr) * (1 + fee)))
+        [bal, adj_rem_vol]
       end
     if bal > hodl_amt and adj_rem_vol >= @min_order_vol do
       new_order_id = med_mod.post_order(pair, type, adj_rem_vol, new_price, "true")

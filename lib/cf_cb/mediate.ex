@@ -16,7 +16,7 @@ defmodule CfCb.Mediate do
   end
 
   def get_maker_fee() do
-    {:ok, [fees]} = JsonUtils.retry_req(&CfCb.Api.get_fees/0, [])
+    {:ok, fees} = JsonUtils.retry_req(&CfCb.Api.get_fees/0, [])
     {maker_fee, _} = fees["maker_fee_rate"]
                      |> Float.parse()
     maker_fee

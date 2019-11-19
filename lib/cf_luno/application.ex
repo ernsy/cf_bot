@@ -15,7 +15,7 @@ defmodule CfLuno.Application do
 #      },
       {
         CfLuno.Statem,
-        %{med_mod: CfCb.Mediate, pair: "BTC-USD", oracle_pair: "BTC-USD", min_increment: 0.01, review_time: 400}
+        %{med_mod: CfCb.Mediate, pair: "BTC-GBP", oracle_pair: "BTC-USD", min_increment: 0.01, review_time: 400}
       },
       {CfCb.WsClient, {["BTC-USD"], &CfLuno.Statem.oracle_update/1}}
     ]
