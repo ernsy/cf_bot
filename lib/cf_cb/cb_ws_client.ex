@@ -9,7 +9,7 @@ defmodule CfCb.WsClient do
     {:ok, pid}
   end
 
-  def handle_connect(_conn, %{products: products} = state) do
+  def handle_connect(_conn, state) do
     IO.puts("connected!")
     {:ok, state}
   end
