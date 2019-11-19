@@ -6,6 +6,7 @@ defmodule CfLuno.Api do
   #---------------------------------------------------------------------------------------------------------------------
   # Mock api
   #---------------------------------------------------------------------------------------------------------------------
+
   def post_order(params) do
     path = "/postorder?" <> URI.encode_query(params)
     Logger.debug("Mock post order url: #{inspect path}")
