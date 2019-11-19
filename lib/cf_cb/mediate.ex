@@ -2,7 +2,7 @@ defmodule CfCb.Mediate do
   require Logger
 
   def get_ticker(product_id) do
-    {:ok, ticker} = JsonUtils.retry_req(&CfCb.Api.get_ticker/1,[product_id])
+    {:ok, ticker} = JsonUtils.retry_req(&CfCb.Api.get_ticker/1, [product_id])
     ticker
   end
 
@@ -13,6 +13,13 @@ defmodule CfCb.Mediate do
     {avail_bal, _rem_bin} = Float.parse(avail_str)
     Logger.info("Available #{currency} balance: #{avail_bal}")
     avail_bal
+  end
+
+  def get_maker_fee() do
+    {:ok, [fees]} = JsonUtils.retry_req(&CfCb.Api.get_fees/0, [])
+    {maker_fee, _} = fees["maker_fee_rate"]
+                     |> Float.parse()
+    maker_fee
   end
 
   def get_orderbook(product_id) do
@@ -41,7 +48,7 @@ defmodule CfCb.Mediate do
     {:ok, orders} = JsonUtils.retry_req(&CfCb.Api.list_orders/1, [[product_id: product_id, status: "open"]])
     orders && Enum.map(
       orders,
-      fn (%{"id" => id, "price" => price,  "created_at" => datetime_str}) ->
+      fn (%{"id" => id, "price" => price, "created_at" => datetime_str}) ->
         {:ok, datetime, _} = DateTime.from_iso8601(datetime_str)
         ts = DateTime.to_unix(datetime)
         %{order_id: id, order_price: price, order_time: ts}
@@ -51,7 +58,7 @@ defmodule CfCb.Mediate do
 
   def sum_trades(_product_id, _since, nil), do: %{"ASK" => 0, "BID" => 0}
   def sum_trades(_product_id, since, order_id) do
-    {:ok, fills} = JsonUtils.retry_req(&CfCb.Api.fills/1, [[order_id: order_id]])
+    {:ok, fills} = JsonUtils.retry_req(&CfCb.Api.get_fills/1, [[order_id: order_id]])
     get_traded_volume(fills, since)
   end
 
