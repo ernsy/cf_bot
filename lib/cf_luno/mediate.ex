@@ -42,7 +42,8 @@ defmodule CfLuno.Mediate do
     orders && Enum.map(
       orders,
       fn (%{"order_id" => id, "limit_price" => price,  "creation_timestamp" => ts}) ->
-        %{order_id: id, order_price: price, order_time: ts}
+        {pricef, _} = Float.parse(price)
+        %{order_id: id, order_price: pricef, order_time: ts}
       end
     )
   end
