@@ -67,8 +67,13 @@ defmodule CfLuno.Statem do
         %{sell_amt: 0, prim_hodl_amt: prim_hodl_amt, buy_amt: 0, sec_hodl_amt: sec_hodl_amt, mode: "manual"}
     end
     orders = med_mod.list_open_orders(pair)
-    order_length = length(orders)
-    order_map = if order_length == 1, do: hd(orders), else: cancel_orders(orders, med_mod)
+    order_length = orders && length(orders)
+    order_map = if  order_length == 1 do
+      hd(orders)
+    else
+      cancel_orders(orders, med_mod)
+      %{}
+    end
     {:ok, [oracle_price, datetime]} = get_oracle_price(oracle_pair)
     queue = :queue.new
     maker_fee = med_mod.get_maker_fee()
