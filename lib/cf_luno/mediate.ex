@@ -15,6 +15,10 @@ defmodule CfLuno.Mediate do
     avail_bal
   end
 
+  def get_maker_fee() do
+    0.01
+  end
+
   def get_orderbook(pair) do
     {:ok, orderbook} = CfLuno.Api.get_orderbook_top(pair)
     orderbook
