@@ -1,7 +1,7 @@
 defmodule CfCb.Api do
   require Logger
 
-  @cb_uri  Application.get_env(:cf_luno, :cb_uri, "https://public.sandbox.pro.coinbase.com")
+  @cb_uri  Application.get_env(:cf_bot, :cb_uri, "https://public.sandbox.pro.coinbase.com")
 
   def get_oracle_ticker(product_id) do
     url = "https://api.pro.coinbase.com/products/" <> product_id <> "/ticker"

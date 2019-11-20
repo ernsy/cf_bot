@@ -10,11 +10,11 @@ use Mix.Config
 
 # You can configure your application as:
 #
-#     config :cf_luno, key: :value
+#     config :cf_bot, key: :value
 #
 # and access this configuration in your application as:
 #
-#     Application.get_env(:cf_luno, :key)
+#     Application.get_env(:cf_bot, :key)
 #
 # You can also configure a third-party app:
 #
@@ -34,4 +34,4 @@ config :logger, :console,
        level: :info,
        metadata: [:module, :line, :function]
 
-config :cf_luno, :cb_uri, "https://api.pro.coinbase.com"
+config :cf_bot, :cb_uri, "https://api.pro.coinbase.com"
