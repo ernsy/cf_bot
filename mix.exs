@@ -1,4 +1,4 @@
-defmodule CfLuno.MixProject do
+defmodule CfBot.MixProject do
   use Mix.Project
 
   def project do
@@ -15,7 +15,7 @@ defmodule CfLuno.MixProject do
   def application do
     [
       extra_applications: [:logger],
-      mod: {CfLuno.Application, []}
+      mod: {CfBot.Application, []}
     ]
   end
 

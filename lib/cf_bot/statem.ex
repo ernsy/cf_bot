@@ -1,4 +1,4 @@
-defmodule CfLuno.Statem do
+defmodule CfBot.Statem do
   require Logger
 
   use GenStateMachine

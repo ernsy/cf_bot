@@ -1,8 +1,8 @@
-defmodule CfLunoTest do
+defmodule CfBotTest do
   use ExUnit.Case
-  doctest CfLuno
+  doctest CfBot
 
   test "greets the world" do
-    assert CfLuno.hello() == :world
+    assert CfBot.hello() == :world
   end
 end
