@@ -13,7 +13,7 @@ defmodule CfBot.Application do
 #      },
       {
         CfBot.Statem,
-        %{med_mod: CfCb.Mediate, pair: "BTC-GBP", oracle_pair: "BTC-USD", min_increment: 0.01, review_time: 400}
+        %{med_mod: CfCb.Mediate, pair: "BTC-GBP", oracle_pair: "BTC-USD", min_increment: 0.01, review_time: 50}
       },
       {CfCb.WsClient, {["BTC-USD"], &CfBot.Statem.oracle_update/1}}
     ]

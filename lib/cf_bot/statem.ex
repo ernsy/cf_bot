@@ -204,7 +204,7 @@ defmodule CfBot.Statem do
       :ok = :dets.insert(:disk_storage, {:data, new_data})
       {:keep_state, new_data, [{:state_timeout, review_time, {action, []}} | post_actions]}
     else
-      next_state = if mode == "hodl" do
+      next_state = if mode == "hodl" or mode == "buy" do
         :wait_stable
       else
         state
@@ -378,7 +378,6 @@ defmodule CfBot.Statem do
          }
        ) do
     !is_nil(order_id) && med_mod.stop_order(order_id, old_price)
-    Process.sleep(200) #wait for balance to update after cancelling order
     traded_vol = med_mod.sum_trades(pair, old_ts, order_id)[type]
     [ts, rem_vol, alt_vol] = get_return_vlaues(traded_vol, new_vol, alt_vol, mode)
     prim_curr = String.slice(pair, 0, 3)
