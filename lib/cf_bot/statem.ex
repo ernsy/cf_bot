@@ -3,11 +3,7 @@ defmodule CfBot.Statem do
 
   use GenStateMachine
 
-  @dt_perc 0.0015
-  @ut_perc 0.0015
-  @stable_perc 0.0002
   @min_order_vol 0.001
-
   @trade_delta_sec 60
 
   #---------------------------------------------------------------------------------------------------------------------
@@ -54,7 +50,17 @@ defmodule CfBot.Statem do
   # callbacks
   #---------------------------------------------------------------------------------------------------------------------
 
-  def init(%{med_mod: med_mod, pair: pair, oracle_pair: oracle_pair, min_increment: _, review_time: _} = init_map) do
+  def init(
+        %{
+          med_mod: med_mod,
+          pair: pair,
+          oracle_pair: oracle_pair,
+          min_increment: _,
+          review_time: _,
+          dt_pct: _,
+          ut_pct: _
+        } = init_map
+      ) do
     {:ok, :disk_storage} = :dets.open_file(:disk_storage, [type: :set])
     data = case :dets.lookup(:disk_storage, :data) do
       [data: %{sell_amt: _, prim_hodl_amt: _, buy_amt: _, sec_hodl_amt: _, mode: _} = data] ->
@@ -124,6 +130,9 @@ defmodule CfBot.Statem do
           med_mod: med_mod,
           pair: pair,
           min_increment: min_increment,
+          dt_pct: dt_pct,
+          ut_pct: ut_pct,
+          stable_pct: s_pct,
           fee: fee,
           mode: mode
         } = data
@@ -137,10 +146,14 @@ defmodule CfBot.Statem do
       transitions = apply(CfBot.Transitions, state, [])
       {next_state, next_action} =
         cond do
-          sell_amt > 0 and buy_amt > 0 -> check_delta(old_price, pricef, transitions[:buy_or_sell])
-          sell_amt > 0 or mode == "hodl" -> check_delta(old_price, pricef, transitions[:sell])
-          buy_amt > 0 or mode == "buy" -> check_delta(old_price, pricef, transitions[:buy])
-          true -> {state, []}
+          sell_amt > 0 and buy_amt > 0 ->
+            check_delta(old_price, pricef, dt_pct, ut_pct, s_pct, transitions[:buy_or_sell])
+          sell_amt > 0 or mode == "hodl" ->
+            check_delta(old_price, pricef, dt_pct, ut_pct, s_pct, transitions[:sell])
+          buy_amt > 0 or mode == "buy" ->
+            check_delta(old_price, pricef, dt_pct, ut_pct, s_pct, transitions[:buy])
+          true ->
+            {state, []}
         end
       new_data = %{data | oracle_queue: {queue, length}, oracle_ref: {q_price, q_datetime}}
       if next_state != state do
@@ -265,14 +278,14 @@ defmodule CfBot.Statem do
     {:ok, [float_price, datetime]}
   end
 
-  defp check_delta(old_price, curr_price, transitions) do
-    delta_perc = (curr_price - old_price) / old_price
-    case delta_perc do
-      change_perc when abs(change_perc) < @stable_perc -> transitions.stable
-      change_perc when change_perc > @ut_perc -> transitions.up_trend
-      change_perc when change_perc < -@dt_perc -> transitions.down_trend
-      change_perc when change_perc > 0 -> transitions.positive
-      change_perc when change_perc < 0 -> transitions.negative
+  defp check_delta(old_price, curr_price, dt_pct, ut_pct, stable_pct, transitions) do
+    delta_pct = (curr_price - old_price) / old_price
+    case delta_pct do
+      change_pct when abs(change_pct) < stable_pct -> transitions.stable
+      change_pct when change_pct > ut_pct -> transitions.up_trend
+      change_pct when change_pct < -dt_pct -> transitions.down_trend
+      change_pct when change_pct > 0 -> transitions.positive
+      change_pct when change_pct < 0 -> transitions.negative
     end
   end
 
