@@ -314,9 +314,9 @@ defmodule CfBot.Statem do
          0,
          _curr_limit_vol,
          type,
-         %{med_mod: med_mod, pair: pair, min_incr: min_incr}
+         %{med_mod: mod, pair: pair, min_incr: min_incr}
        ) do
-    %{"bid" => bid, "ask" => ask} = med_mod.get_ticker(pair)
+    %{"bid" => bid, "ask" => ask} = mod.get_ticker(pair)
     Logger.info("Bid price:" <> bid <> " ask price:" <> ask)
     {bidf, _} = Float.parse(bid)
     {askf, _} = Float.parse(ask)
@@ -330,9 +330,9 @@ defmodule CfBot.Statem do
          pre_vol,
          curr_vol,
          type,
-         %{order_price: curr_price, med_mod: req_mod, pair: pair, min_incr: min_incr}
+         %{order_price: curr_price, med_mod: mod, pair: pair, min_incr: min_incr}
        ) do
-    %{"asks" => asks, "bids" => bids} = req_mod.get_orderbook(pair)
+    %{"asks" => asks, "bids" => bids} = mod.get_orderbook(pair)
     {type_orders, alt_orders} = if type == "ASK", do: {asks, bids}, else: {bids, asks}
     Enum.reduce_while(
       type_orders,
