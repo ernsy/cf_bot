@@ -14,40 +14,40 @@ defmodule CfBot.Statem do
   # api
   #---------------------------------------------------------------------------------------------------------------------
 
-  def start_link(init_data) do
-    GenStateMachine.start_link(__MODULE__, init_data, name: __MODULE__)
+  def start_link(%{name: name} = init_data) do
+    GenStateMachine.start_link(__MODULE__, init_data, name: name)
   end
 
-  def pause() do
-    GenStateMachine.cast(__MODULE__, :pause)
+  def pause(name) do
+    GenStateMachine.cast(name, :pause)
   end
 
-  def resume() do
-    GenStateMachine.cast(__MODULE__, {:resume, {:limit_sell, []}})
+  def resume(name) do
+    GenStateMachine.cast(name, {:resume, {:limit_sell, []}})
   end
 
-  def set_sell_amt(amount) when is_float(amount) do
-    GenStateMachine.cast(__MODULE__, {:set_data, :sell_amt, amount})
+  def set_sell_amt(name, amount) when is_float(amount) do
+    GenStateMachine.cast(name, {:set_data, :sell_amt, amount})
   end
 
-  def set_buy_amt(amount) when is_float(amount) do
-    GenStateMachine.cast(__MODULE__, {:set_data, :buy_amt, amount})
+  def set_buy_amt(name, amount) when is_float(amount) do
+    GenStateMachine.cast(name, {:set_data, :buy_amt, amount})
   end
 
-  def set_hodl_amt(asset, amount) do
+  def set_hodl_amt(name, asset, amount) do
     type = cond do
       asset == "primary" -> :prim_hodl_amt
       asset == "secondary" -> :sec_hodl_amt
     end
-    GenStateMachine.cast(__MODULE__, {:set_data, type, amount})
+    GenStateMachine.cast(name, {:set_data, type, amount})
   end
 
-  def oracle_update(msg) do
-    GenStateMachine.cast(__MODULE__, {:oracle_update, msg})
+  def oracle_update(name, msg) do
+    GenStateMachine.cast(name, {:oracle_update, msg})
   end
 
-  def set_mode(mode) do
-    GenStateMachine.cast(__MODULE__, {:set_data, :mode, mode})
+  def set_mode(name, mode) do
+    GenStateMachine.cast(name, {:set_data, :mode, mode})
   end
 
   #---------------------------------------------------------------------------------------------------------------------

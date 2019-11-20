@@ -3,8 +3,8 @@ defmodule CfCb.WsClient do
 
   @url "wss://ws-feed.pro.coinbase.com"
 
-  def start_link({products, cb_fun} ) do
-    {:ok, pid} = WebSockex.start_link(@url, __MODULE__, %{products: products, cb_fun: cb_fun})
+  def start_link([products, cb_fun, cb_names]) do
+    {:ok, pid} = WebSockex.start_link(@url, __MODULE__, %{products: products, cb_fun: cb_fun, cb_names: cb_names})
     subscribe(pid, products)
     {:ok, pid}
   end
@@ -23,8 +23,8 @@ defmodule CfCb.WsClient do
     handle_msg(Jason.decode!(msg), state)
   end
 
-  def handle_msg( %{"type" => "ticker"} = msg, %{cb_fun: cb_fun} = state) do
-    cb_fun.(msg)
+  def handle_msg( %{"type" => "ticker"} = msg, %{cb_fun: cb_fun, cb_names: names} = state) do
+    Enum.each(names,&(cb_fun.(&1, msg)))
     {:ok, state}
   end
 
