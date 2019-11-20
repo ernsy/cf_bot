@@ -54,13 +54,15 @@ defmodule CfBot.Statem do
         %{
           med_mod: med_mod,
           pair: pair,
-          oracle_pair: oracle_pair,
-          min_increment: _,
+          ref_pair: ref_pair,
+          min_incr: _,
           review_time: _,
           dt_pct: _,
-          ut_pct: _
+          ut_pct: _,
+          stable_pct: _,
         } = init_map
-      ) do
+      )
+    do
     {:ok, :disk_storage} = :dets.open_file(:disk_storage, [type: :set])
     data = case :dets.lookup(:disk_storage, :data) do
       [data: %{sell_amt: _, prim_hodl_amt: _, buy_amt: _, sec_hodl_amt: _, mode: _} = data] ->
@@ -80,7 +82,7 @@ defmodule CfBot.Statem do
       cancel_orders(orders, med_mod)
       %{}
     end
-    {:ok, [oracle_price, datetime]} = get_oracle_price(oracle_pair)
+    {:ok, [oracle_price, datetime]} = get_ref_price(ref_pair)
     queue = :queue.new
     maker_fee = med_mod.get_maker_fee()
     init_data = %{
@@ -129,7 +131,7 @@ defmodule CfBot.Statem do
           oracle_ref: {old_price, old_datetime},
           med_mod: med_mod,
           pair: pair,
-          min_increment: min_increment,
+          min_incr: min_incr,
           dt_pct: dt_pct,
           ut_pct: ut_pct,
           stable_pct: s_pct,
@@ -156,31 +158,8 @@ defmodule CfBot.Statem do
             {state, []}
         end
       new_data = %{data | oracle_queue: {queue, length}, oracle_ref: {q_price, q_datetime}}
-      if next_state != state do
-        Logger.warn("State change:#{next_state}")
-        Logger.info("old oracle price: #{old_price}, new oracle price:#{pricef}")
-        Logger.info("Time between trades: #{seconds_diff}")
-        new_sell_amt =
-          if mode == "hodl" and sell_amt <= 0 do
-            prim_curr = String.slice(pair, 0, 3)
-            max(med_mod.get_avail_bal(prim_curr) - hodl_amt, 0)
-          else
-            sell_amt
-          end
-        new_buy_amt =
-          if mode == "buy" and buy_amt <= 0 do
-            sec_curr = String.slice(pair, -3, 3)
-            {bid_price, _} = med_mod.get_ticker(pair)["bid"]
-                             |> Float.parse()
-            (med_mod.get_avail_bal(sec_curr) - hodl_amt) / ((bid_price + min_increment) * (1 + fee))
-          else
-            buy_amt
-          end
-        {:next_state, next_state, %{new_data | sell_amt: new_sell_amt, buy_amt: new_buy_amt}, next_action}
-      else
-        {:next_state, next_state, new_data}
-      end
-
+      Logger.info("Time between trades: #{seconds_diff}")
+      do_state_change(state, next_state, next_action, pricef, new_data)
     else
       new_queue = :queue.in({pricef, datetime}, queue)
       new_data = %{data | oracle_queue: {new_queue, length + 1}}
@@ -225,7 +204,6 @@ defmodule CfBot.Statem do
       Logger.warn("Volume below minimum, next state: #{next_state}")
       {:next_state, next_state, %{data | vol_key => 0, :order_price => 0}, []}
     end
-
   end
 
   def handle_event(
@@ -271,7 +249,7 @@ defmodule CfBot.Statem do
   # helper functions
   #---------------------------------------------------------------------------------------------------------------------
 
-  defp get_oracle_price(pair) do
+  defp get_ref_price(pair) do
     {:ok, %{"price" => price, "time" => time}} = CfCb.Api.get_oracle_ticker(pair)
     {float_price, _rem_bin} = Float.parse(price)
     {:ok, datetime, _} = DateTime.from_iso8601(time)
@@ -289,27 +267,70 @@ defmodule CfBot.Statem do
     end
   end
 
+  defp do_state_change(
+         state,
+         next_state,
+         next_action,
+         pricef,
+         %{
+           order_price: old_price,
+           sell_amt: sell_amt,
+           buy_amt: buy_amt,
+           pair: pair,
+           prim_hodl_amt: p_hodl_amt,
+           sec_hodl_amt: sec_hodl_amt,
+           med_mod: med_mod,
+           min_incr: min_incr,
+           fee: fee,
+           mode: mode
+         } = data
+       ) do
+    if next_state != state do
+      Logger.warn("State change:#{next_state}")
+      Logger.info("old oracle price: #{old_price}, new oracle price:#{pricef}")
+      new_sell_amt =
+        if mode == "hodl" and sell_amt <= 0 do
+          prim_curr = String.slice(pair, 0, 3)
+          max(med_mod.get_avail_bal(prim_curr) - p_hodl_amt, 0)
+        else
+          sell_amt
+        end
+      new_buy_amt =
+        if mode == "buy" and buy_amt <= 0 do
+          sec_curr = String.slice(pair, -3, 3)
+          {bid_price, _} = med_mod.get_ticker(pair)["bid"]
+                           |> Float.parse()
+          (med_mod.get_avail_bal(sec_curr) - sec_hodl_amt) / ((bid_price + min_incr) * (1 + fee))
+        else
+          buy_amt
+        end
+      {:next_state, next_state, %{data | sell_amt: new_sell_amt, buy_amt: new_buy_amt}, next_action}
+    else
+      {:next_state, next_state, data}
+    end
+  end
+
   defp calc_limit_order_price(
          0,
          _curr_limit_vol,
          type,
-         %{med_mod: med_mod, pair: pair, min_increment: min_increment}
+         %{med_mod: med_mod, pair: pair, min_incr: min_incr}
        ) do
     %{"bid" => bid, "ask" => ask} = med_mod.get_ticker(pair)
     Logger.info("Bid price:" <> bid <> " ask price:" <> ask)
     {bidf, _} = Float.parse(bid)
     {askf, _} = Float.parse(ask)
     if type == "ASK" do
-      {:ok, calc_best_price(askf, askf, bidf, min_increment, type)}
+      {:ok, calc_best_price(askf, askf, bidf, min_incr, type)}
     else
-      {:ok, calc_best_price(bidf, bidf, askf, min_increment, type)}
+      {:ok, calc_best_price(bidf, bidf, askf, min_incr, type)}
     end
   end
   defp calc_limit_order_price(
          pre_vol,
          curr_vol,
          type,
-         %{order_price: curr_price, med_mod: req_mod, pair: pair, min_increment: min_increment}
+         %{order_price: curr_price, med_mod: req_mod, pair: pair, min_incr: min_incr}
        ) do
     %{"asks" => asks, "bids" => bids} = req_mod.get_orderbook(pair)
     {type_orders, alt_orders} = if type == "ASK", do: {asks, bids}, else: {bids, asks}
@@ -336,7 +357,7 @@ defmodule CfBot.Statem do
           )
           {best_pricef, _} = Float.parse(best_price)
           {best_alt_pricef, _} = Float.parse(best_alt_price)
-          new_price = calc_best_price(best_pricef, price, best_alt_pricef, min_increment, type)
+          new_price = calc_best_price(best_pricef, price, best_alt_pricef, min_incr, type)
           {:halt, {:ok, new_price}}
         else
           {:cont, {new_acc_volume, rem_limit_vol}}
@@ -345,17 +366,17 @@ defmodule CfBot.Statem do
     )
   end
 
-  defp calc_best_price(ask_price, ask_price, bid_price, min_increment, "ASK") do
-    max(bid_price + min_increment, ask_price - min_increment)
+  defp calc_best_price(ask_price, ask_price, bid_price, min_incr, "ASK") do
+    max(bid_price + min_incr, ask_price - min_incr)
   end
-  defp calc_best_price(ask_price, order_price, _, min_increment, "ASK") do
-    max(ask_price + min_increment, order_price) - min_increment
+  defp calc_best_price(ask_price, order_price, _, min_incr, "ASK") do
+    max(ask_price + min_incr, order_price) - min_incr
   end
-  defp calc_best_price(bid_price, bid_price, ask_price, min_increment, "BID") do
-    min(ask_price - min_increment, bid_price + min_increment)
+  defp calc_best_price(bid_price, bid_price, ask_price, min_incr, "BID") do
+    min(ask_price - min_incr, bid_price + min_incr)
   end
-  defp calc_best_price(bid_price, order_price, _, min_increment, "BID") do
-    min(bid_price - min_increment, order_price) + min_increment
+  defp calc_best_price(bid_price, order_price, _, min_incr, "BID") do
+    min(bid_price - min_incr, order_price) + min_incr
   end
 
   defp place_limit_order(
@@ -386,7 +407,7 @@ defmodule CfBot.Statem do
            mode: mode,
            med_mod: med_mod,
            pair: pair,
-           min_increment: min_incr,
+           min_incr: min_incr,
            fee: fee
          }
        ) do
