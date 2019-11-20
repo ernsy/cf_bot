@@ -158,7 +158,7 @@ defmodule CfBot.Statem do
             {state, []}
         end
       new_data = %{data | oracle_queue: {queue, length}, oracle_ref: {q_price, q_datetime}}
-      Logger.info("Time between trades: #{seconds_diff}")
+      Logger.debug("Time between trades: #{seconds_diff}")
       do_state_change(state, next_state, next_action, pricef, new_data)
     else
       new_queue = :queue.in({pricef, datetime}, queue)
