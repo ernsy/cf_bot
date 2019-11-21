@@ -82,7 +82,7 @@ defmodule CfBot.Statem do
       cancel_orders(orders, med_mod)
       %{}
     end
-    {:ok, [oracle_price, datetime]} = get_ref_price(ref_pair)
+    {:ok, [oracle_price, datetime]} = get_oracle_price(ref_pair)
     queue = :queue.new
     maker_fee = med_mod.get_maker_fee()
     init_data = %{
@@ -244,7 +244,7 @@ defmodule CfBot.Statem do
   # helper functions
   #---------------------------------------------------------------------------------------------------------------------
 
-  defp get_ref_price(pair) do
+  defp get_oracle_price(pair) do
     {:ok, %{"price" => price, "time" => time}} = CfCb.Api.get_oracle_ticker(pair)
     {float_price, _rem_bin} = Float.parse(price)
     {:ok, datetime, _} = DateTime.from_iso8601(time)
