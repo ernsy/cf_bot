@@ -4,26 +4,6 @@ defmodule CfLuno.Api do
   @luno_url_v1 "https://api.mybitx.com/api/1"
 
   #---------------------------------------------------------------------------------------------------------------------
-  # Mock api
-  #---------------------------------------------------------------------------------------------------------------------
-
-#  def post_order(params) do
-#    path = "/postorder?" <> URI.encode_query(params)
-#    Logger.debug("Mock post order url: #{inspect path}")
-#    {:ok, %{"order_id" => "TestOrderID"}}
-#  end
-#
-#  def stop_order(order_id) do
-#    path = "/stoporder?order_id=" <> order_id
-#    Logger.debug("mock stop order url: #{inspect path}")
-#    {:ok, %{"success" => true}}
-#  end
-#
-#  def list_trades(_params) do
-#    {:ok, %{"trades" => [%{"type" => "ASK", "volume" => "0.0005"}, %{"type" => "BID", "volume" => "0.0005"}]}}
-#  end
-
-  #---------------------------------------------------------------------------------------------------------------------
   # API
   #---------------------------------------------------------------------------------------------------------------------
   @doc """
