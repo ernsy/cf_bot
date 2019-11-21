@@ -127,15 +127,10 @@ defmodule CfBot.Statem do
           oracle_queue: {queue, length},
           sell_amt: sell_amt,
           buy_amt: buy_amt,
-          prim_hodl_amt: hodl_amt,
           oracle_ref: {old_price, old_datetime},
-          med_mod: med_mod,
-          pair: pair,
-          min_incr: min_incr,
           dt_pct: dt_pct,
           ut_pct: ut_pct,
           stable_pct: s_pct,
-          fee: fee,
           mode: mode
         } = data
       ) do
@@ -267,48 +262,44 @@ defmodule CfBot.Statem do
     end
   end
 
-  defp do_state_change(
-         state,
-         next_state,
-         next_action,
-         pricef,
+  defp do_state_change(state, state, _next_action, _pricef, data) do
+    {:next_state, state, data}
+  end
+  defp do_state_change(_state, next_state, next_action, pricef, %{order_price: old_price, } = data) do
+    Logger.warn("State change:#{next_state}")
+    Logger.info("old oracle price: #{old_price}, new oracle price:#{pricef}")
+    new_sell_amt = get_mode_sell_amt(data)
+    new_buy_amt = get_mode_buy_amt(data)
+    {:next_state, next_state, %{data | sell_amt: new_sell_amt, buy_amt: new_buy_amt}, next_action}
+  end
+
+  defp get_mode_sell_amt(%{sell_amt: sell_amt, pair: pair, prim_hodl_amt: hodl_amt, med_mod: med_mod, mode: "hodl"})
+       when sell_amt <= 0 do
+    prim_curr = String.slice(pair, 0, 3)
+    max(med_mod.get_avail_bal(prim_curr) - hodl_amt, 0)
+  end
+  defp get_mode_sell_amt(%{sell_amt: sell_amt}), do: sell_amt
+
+  defp get_mode_buy_amt(
          %{
-           order_price: old_price,
+           oracle_ref: {old_price, _old_datetime},
            sell_amt: sell_amt,
            buy_amt: buy_amt,
            pair: pair,
-           prim_hodl_amt: p_hodl_amt,
-           sec_hodl_amt: sec_hodl_amt,
+           sec_hodl_amt: hodl_amt,
            med_mod: med_mod,
            min_incr: min_incr,
            fee: fee,
-           mode: mode
-         } = data
-       ) do
-    if next_state != state do
-      Logger.warn("State change:#{next_state}")
-      Logger.info("old oracle price: #{old_price}, new oracle price:#{pricef}")
-      new_sell_amt =
-        if mode == "hodl" and sell_amt <= 0 do
-          prim_curr = String.slice(pair, 0, 3)
-          max(med_mod.get_avail_bal(prim_curr) - p_hodl_amt, 0)
-        else
-          sell_amt
-        end
-      new_buy_amt =
-        if mode == "buy" and buy_amt <= 0 do
-          sec_curr = String.slice(pair, -3, 3)
-          {bid_price, _} = med_mod.get_ticker(pair)["bid"]
-                           |> Float.parse()
-          (med_mod.get_avail_bal(sec_curr) - sec_hodl_amt) / ((bid_price + min_incr) * (1 + fee))
-        else
-          buy_amt
-        end
-      {:next_state, next_state, %{data | sell_amt: new_sell_amt, buy_amt: new_buy_amt}, next_action}
-    else
-      {:next_state, next_state, data}
-    end
+           mode: "buy"
+         }
+       )
+       when buy_amt <= 0 do
+    sec_curr = String.slice(pair, -3, 3)
+    {bid_price, _} = med_mod.get_ticker(pair)["bid"]
+                     |> Float.parse()
+    (med_mod.get_avail_bal(sec_curr) - hodl_amt) / ((bid_price + min_incr) * (1 + fee))
   end
+  defp get_mode_buy_amt(%{buy_amt: buy_amt}), do: buy_amt
 
   defp calc_limit_order_price(
          0,
