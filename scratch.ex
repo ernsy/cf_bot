@@ -5,8 +5,10 @@ CfBot.Statem.set_mode(CfLuno,"normal")
 
 CfBot.Statem.set_hodl_amt(CfLuno, "primary", 0.502)
 CfBot.Statem.set_sell_amt(CfLuno,0.0)
-CfBot.Statem.set_mode(CfLuno,"bot")
+CfBot.Statem.set_mode(CfLuno,"hodl")
 
 CfBot.Statem.set_hodl_amt(CfCb, "secondary", 0.0)
 CfBot.Statem.set_buy_amt(CfCb,0.0)
 CfBot.Statem.set_mode(CfCb,"buy")
+
+c("lib/cf_cb/mediate.ex")
