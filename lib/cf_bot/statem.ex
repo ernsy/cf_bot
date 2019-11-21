@@ -273,7 +273,7 @@ defmodule CfBot.Statem do
          next_action,
          pricef,
          %{
-           order_price: old_price,
+           oracle_ref: {old_price, _old_datetime},
            sell_amt: sell_amt,
            buy_amt: buy_amt,
            pair: pair,
