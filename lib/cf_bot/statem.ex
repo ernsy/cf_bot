@@ -153,7 +153,7 @@ defmodule CfBot.Statem do
             {state, []}
         end
       new_data = %{data | oracle_queue: {queue, length}, oracle_ref: {q_price, q_datetime}}
-      Logger.info("Time between trades: #{seconds_diff}")
+      Logger.debug("Time between trades: #{seconds_diff}")
       do_state_change(state, next_state, next_action, pricef, new_data)
     else
       new_queue = :queue.in({pricef, datetime}, queue)
@@ -282,6 +282,8 @@ defmodule CfBot.Statem do
 
   defp get_mode_buy_amt(
          %{
+           oracle_ref: {old_price, _old_datetime},
+           sell_amt: sell_amt,
            buy_amt: buy_amt,
            pair: pair,
            sec_hodl_amt: hodl_amt,
@@ -303,9 +305,9 @@ defmodule CfBot.Statem do
          0,
          _curr_limit_vol,
          type,
-         %{med_mod: med_mod, pair: pair, min_incr: min_incr}
+         %{med_mod: mod, pair: pair, min_incr: min_incr}
        ) do
-    %{"bid" => bid, "ask" => ask} = med_mod.get_ticker(pair)
+    %{"bid" => bid, "ask" => ask} = mod.get_ticker(pair)
     Logger.info("Bid price:" <> bid <> " ask price:" <> ask)
     {bidf, _} = Float.parse(bid)
     {askf, _} = Float.parse(ask)
@@ -319,9 +321,9 @@ defmodule CfBot.Statem do
          pre_vol,
          curr_vol,
          type,
-         %{order_price: curr_price, med_mod: req_mod, pair: pair, min_incr: min_incr}
+         %{order_price: curr_price, med_mod: mod, pair: pair, min_incr: min_incr}
        ) do
-    %{"asks" => asks, "bids" => bids} = req_mod.get_orderbook(pair)
+    %{"asks" => asks, "bids" => bids} = mod.get_orderbook(pair)
     {type_orders, alt_orders} = if type == "ASK", do: {asks, bids}, else: {bids, asks}
     Enum.reduce_while(
       type_orders,
