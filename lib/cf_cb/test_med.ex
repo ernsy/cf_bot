@@ -7,12 +7,7 @@ defmodule CfCb.TestMed do
   end
 
   def get_avail_bal(currency) do
-    {:ok, accounts} = JsonUtils.retry_req(&CfCb.Api.get_accounts/0, [])
-    %{"available" => avail_str} =
-      Enum.find(accounts, fn (%{"currency" => acc_curr}) -> acc_curr == currency end)
-    {avail_bal, _rem_bin} = Float.parse(avail_str)
-    Logger.info("Available #{currency} balance: #{avail_bal}")
-    avail_bal
+    IO.inspect((if currency == "BTC", do: 0.5, else: 2500.0), label: "MOCK Bal")
   end
 
   def get_maker_fee() do
@@ -29,10 +24,8 @@ defmodule CfCb.TestMed do
     %{"bids" => mediated_bids, "asks" => mediated_asks}
   end
 
-  def post_order(product_id, type, size, price, post_only) do
+  def post_order(_product_id, type, size, price, _post_only) do
     size_str = :erlang.float_to_binary(size, [{:decimals, 6}])
-    price_str = :erlang.float_to_binary(price, [{:decimals, 2}])
-    side = if type == "ASK", do: "sell", else: "buy"
     Logger.info("MOCK: Place limit #{type} for #{size_str} at #{price}")
     "TestOrderID"
   end
@@ -57,9 +50,7 @@ defmodule CfCb.TestMed do
 
   def sum_trades(_product_id, _since, nil), do: %{"ASK" => 0, "BID" => 0}
   def sum_trades(_product_id, _since, _order_id) do
-    trades = %{"ASK" => 0.0005, "BID" => 0.001}
-    Logger.info("MOCK: Traded vol: #{inspect trades}")
-    trades
+    IO.inspect(%{"ASK" => 0.0005, "BID" => 0.001},label: "MOCK traded vol")
   end
 
   #---------------------------------------------------------------------------------------------------------------------
