@@ -26,8 +26,9 @@ defmodule CfLuno.Mediate do
 
   def post_order(pair, type, volume, price, post_only) do
     vol_str = :erlang.float_to_binary(volume, [{:decimals, 6}])
+    price_str = :erlang.float_to_binary(volume, [{:decimals, 2}])
     Logger.info("Place limit #{type} for #{vol_str} at #{price}")
-    params = [pair: pair, type: type, volume: vol_str, price: price, post_only: post_only]
+    params = [pair: pair, type: type, volume: vol_str, price: price_str, post_only: post_only]
     {:ok, %{"order_id" => new_order_id}} = CfLuno.Api.post_order(params)
     new_order_id
   end
