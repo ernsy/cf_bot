@@ -24,7 +24,7 @@ defmodule CfLuno.TestMed do
     orderbook
   end
 
-  def post_order(pair, type, volume, price, post_only) do
+  def post_order(_pair, type, volume, price, _post_only) do
     vol_str = :erlang.float_to_binary(volume, [{:decimals, 6}])
     Logger.info("MOCK: Place limit #{type} for #{vol_str} at #{price}")
     "TestOrderID"
@@ -46,7 +46,7 @@ defmodule CfLuno.TestMed do
     )
   end
 
-  def sum_trades(pair, since, _order_id) do
+  def sum_trades(_pair, _since, _order_id) do
     get_traded_volume([%{"type" => "ASK", "volume" => "0.0005"}, %{"type" => "BID", "volume" => "0.0005"}])
   end
 
