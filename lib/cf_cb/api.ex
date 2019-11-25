@@ -64,7 +64,7 @@ defmodule CfCb.Api do
   #---------------------------------------------------------------------------------------------------------------------
 
   defp invoke_public_api(path) do
-    Logger.debug("CB public api v1 path: #{inspect path}")
+    Logger.debug("CB public api path: #{inspect path}")
     @cb_uri <> path
     |> HTTPoison.get()
   end
