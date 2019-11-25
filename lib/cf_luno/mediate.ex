@@ -36,7 +36,7 @@ defmodule CfLuno.Mediate do
   def stop_order(order_id, price) do
     Logger.info("Cancel limit order #{order_id} at #{price}")
     CfLuno.Api.stop_order(order_id)
-    Process.sleep(350) #wait for balance to update after cancelling order
+    Process.sleep(400) #wait for balance to update after cancelling order
   end
 
   def list_open_orders(pair) do
