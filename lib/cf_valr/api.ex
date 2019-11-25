@@ -11,8 +11,8 @@ defmodule CfValr.Api do
     |> invoke_public_api()
   end
 
-  def balance(assets) do
-    "/balance?assets=" <> assets
+  def balance() do
+    "/account/balances"
     |> invoke_private_api("GET")
   end
 
