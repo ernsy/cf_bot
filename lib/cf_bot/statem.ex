@@ -417,7 +417,7 @@ defmodule CfBot.Statem do
       new_order_id = med_mod.post_order(pair, type, adj_rem_vol, new_price, "true")
       {:ok, [ts, adj_rem_vol, alt_vol, new_order_id]}
     else
-      {:ok, [ts, adj_rem_vol, alt_vol, order_id]}
+      {:ok, [ts, 0, alt_vol, order_id]}
     end
   end
 
