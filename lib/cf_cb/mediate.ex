@@ -33,7 +33,7 @@ defmodule CfCb.Mediate do
     size_str = :erlang.float_to_binary(size, [{:decimals, 6}])
     price_str = :erlang.float_to_binary(price, [{:decimals, 2}])
     side = if type == "ASK", do: "sell", else: "buy"
-    Logger.info("Place limit #{type} for #{size_str} at #{price}")
+    Logger.info("Place limit #{type} for #{size_str} at #{price_str}")
     params = %{product_id: product_id, side: side, size: size_str, price: price_str, post_only: post_only}
     {:ok, %{"id" => new_order_id}} = JsonUtils.retry_req(&CfCb.Api.place_order/1, [params])
     new_order_id

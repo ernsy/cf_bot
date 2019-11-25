@@ -1,13 +1,13 @@
-defmodule CfLuno.Api do
+defmodule CfValr.Api do
   require Logger
 
-  @luno_uri "https://api.mybitx.com/api/1"
+  @valr_uri "https://api.valr.com/api/v1"
 
   #---------------------------------------------------------------------------------------------------------------------
   # API
   #---------------------------------------------------------------------------------------------------------------------
   def get_ticker(pair) do
-    "/ticker?pair=" <> pair
+    "/public/" <> pair <> "/marketsummary"
     |> invoke_public_api()
   end
 
@@ -47,13 +47,13 @@ defmodule CfLuno.Api do
 
   defp invoke_public_api(path) do
     Logger.debug("Luno public api path: #{inspect path}")
-    @luno_uri <> path
+    @valr_uri <> path
     |> HTTPoison.get()
   end
 
 
   defp invoke_private_api(path, method) do
-    url = @luno_uri <> path
+    url = @valr_uri <> path
     {:ok, api_key, api_secret} = get_auth_args()
     Logger.debug("Luno private api path: #{inspect url}")
     case method do
@@ -81,3 +81,4 @@ defmodule CfLuno.Api do
     {:ok, System.get_env("luno_api_key"), System.get_env("luno_api_secret")}
   end
 end
+
