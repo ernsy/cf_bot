@@ -7,11 +7,13 @@ defmodule CfValr.Mediate do
     ticker
   end
 
-  def get_avail_bal(asset) do
-    {:ok, %{"balance" => [%{"balance" => avail_bal, "unconfirmed" => unconf_bal, "reserved" => reserved}]}} =
-      JsonUtils.retry_req(&CfValr.Api.balance/1, [asset])
-    avail_bal = to_float(avail_bal) + to_float(unconf_bal) - to_float(reserved)
-    Logger.info("Available #{asset} balance: #{avail_bal}")
+  def get_avail_bal(currency) do
+    {:ok, balances} =
+      JsonUtils.retry_req(&CfValr.Api.balances/0, [])
+    %{"available" => avail_str} =
+      Enum.find(balances, fn (%{"currency" => curr}) -> curr == currency end)
+    {avail_bal, _rem_bin} = Float.parse(avail_str)
+    Logger.info("Available #{currency} balance: #{avail_bal}")
     avail_bal
   end
 
@@ -20,8 +22,10 @@ defmodule CfValr.Mediate do
   end
 
   def get_orderbook(pair) do
-    {:ok, orderbook} = JsonUtils.retry_req(&CfValr.Api.get_orderbook_top/1,[pair])
-    orderbook
+    {:ok, %{"Bids" => bids, "Asks" => asks}} = JsonUtils.retry_req(&CfValr.Api.get_orderbook_top/1,[pair])
+    mediated_bids = mediate_order_book(bids)
+    mediated_asks = mediate_order_book(asks)
+    %{"bids" => mediated_bids, "asks" => mediated_asks}
   end
 
   def post_order(pair, type, volume, price, post_only) do
@@ -58,6 +62,16 @@ defmodule CfValr.Mediate do
   #---------------------------------------------------------------------------------------------------------------------
   # helper functions
   #---------------------------------------------------------------------------------------------------------------------
+
+
+  defp mediate_order_book(orders) do
+    Enum.map(
+      orders,
+      fn (%{"quantity" => vol, "price" => price}) ->
+        %{"volume" => vol, "price" => price}
+      end
+    )
+  end
 
   defp get_traded_volume(nil), do: %{"ASK" => 0, "BID" => 0}
   defp get_traded_volume(trades) do

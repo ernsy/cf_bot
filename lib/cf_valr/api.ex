@@ -17,8 +17,8 @@ defmodule CfValr.Api do
   end
 
   def get_orderbook_top(pair) do
-    "/orderbook_top?pair=" <> pair
-    |> invoke_public_api()
+    "/v1/marketdata/" <> pair <> "/orderbook"
+    |> invoke_private_api("GET")
   end
 
   def post_order(params) do
