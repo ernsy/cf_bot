@@ -1,18 +1,18 @@
 defmodule CfValr.Api do
   require Logger
 
-  @valr_uri "https://api.valr.com/api/v1"
+  @valr_uri "https://api.valr.com"
 
   #---------------------------------------------------------------------------------------------------------------------
   # API
   #---------------------------------------------------------------------------------------------------------------------
   def get_ticker(pair) do
-    "/public/" <> pair <> "/marketsummary"
+    "/v1/public/" <> pair <> "/marketsummary"
     |> invoke_public_api()
   end
 
-  def balance() do
-    "/account/balances"
+  def balances() do
+    "/v1/account/balances"
     |> invoke_private_api("GET")
   end
 
@@ -52,33 +52,30 @@ defmodule CfValr.Api do
   end
 
 
-  defp invoke_private_api(path, method) do
+  defp invoke_private_api(path, method, body \\ "") do
     url = @valr_uri <> path
-    {:ok, api_key, api_secret} = get_auth_args()
-    Logger.debug("Luno private api path: #{inspect url}")
+    headers = get_auth_headers(method, path, body)
+    Logger.debug("CB private api v1 url: #{inspect url}")
     case method do
-      "GET" ->
-        HTTPoison.get(
-          url,
-          [],
-          hackney: [
-            basic_auth: {api_key, api_secret}
-          ]
-        )
-      "POST" ->
-        HTTPoison.post(
-          url,
-          [],
-          [],
-          hackney: [
-            basic_auth: {api_key, api_secret}
-          ]
-        )
+      "GET" -> HTTPoison.get(url, headers, [])
+      "DELETE" -> HTTPoison.delete(url, headers, [])
+      "POST" -> HTTPoison.post(url, body, headers, [])
     end
   end
 
-  defp get_auth_args() do
-    {:ok, System.get_env("luno_api_key"), System.get_env("luno_api_secret")}
+  def get_auth_headers(method, url_path, body) do
+    key = System.get_env("valr_api_key")
+    secret = System.get_env("valr_api_secret")
+    ts = :os.system_time(:milli_seconds)
+    msg = "#{ts}#{method}#{url_path}#{body}"
+    sign = :crypto.hmac(:sha512, secret, msg)
+           |> Base.encode16(case: :lower)
+    [
+      {"X-VALR-API-KEY", key},
+      {"X-VALR-SIGNATURE", sign},
+      {"X-VALR-TIMESTAMP", ts}
+    ]
   end
 end
 
+#curl --location --request GET "https://api.valr.com/v1/account/balances" --header "X-VALR-API-KEY: 7d1814b386d17fc48aaa95032aaf54f08ef6de4dcc24f79d61a0b2a72aa11a7d" --header "X-VALR-SIGNATURE: 5a58816c3cb149bc900f4f274d2de1809764ab22126ff635c06bd1f222e77fa22750de9057fd4d15dd1cec26c6e451ac13091ce7bd9007cc045315461146cfcc" --header "X-VALR-TIMESTAMP: 1574786805119"
