@@ -27,7 +27,8 @@ defmodule JsonUtils do
     retry_req(req_fun, params, retry_count - 1)
   end
 
-  def decode_json_response({:ok, %HTTPoison.Response{status_code: 200, body: json_body}}) do
+  def decode_json_response({:ok, %HTTPoison.Response{status_code: code, body: json_body}})
+      when code == 200 or code == 202 do
     body = Jason.decode!(json_body)
     Logger.debug("Json Response: {200, #{inspect body}}")
     {:ok, body}

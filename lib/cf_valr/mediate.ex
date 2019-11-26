@@ -1,6 +1,5 @@
 defmodule CfValr.Mediate do
   require Logger
-  import String, only: [to_float: 1]
 
   def get_ticker(pair) do
     {:ok, ticker} = JsonUtils.retry_req(&CfValr.Api.get_ticker/1, [pair])
@@ -22,41 +21,45 @@ defmodule CfValr.Mediate do
   end
 
   def get_orderbook(pair) do
-    {:ok, %{"Bids" => bids, "Asks" => asks}} = JsonUtils.retry_req(&CfValr.Api.get_orderbook_top/1,[pair])
+    {:ok, %{"Bids" => bids, "Asks" => asks}} = JsonUtils.retry_req(&CfValr.Api.get_orderbook_top/1, [pair])
     mediated_bids = mediate_order_book(bids)
     mediated_asks = mediate_order_book(asks)
     %{"bids" => mediated_bids, "asks" => mediated_asks}
   end
 
-  def post_order(pair, type, volume, price, post_only) do
-    vol_str = :erlang.float_to_binary(volume, [{:decimals, 6}])
-    price_str = trunc(price)
-    Logger.info("Place limit #{type} for #{vol_str} at #{price_str}")
-    params = [pair: pair, type: type, volume: vol_str, price: price_str, post_only: post_only]
-    {:ok, %{"order_id" => new_order_id}} = JsonUtils.retry_req(&CfValr.Api.post_order/1, [params])
+  def post_order(pair, type, quantity, price, post_only) do
+    q_str = :erlang.float_to_binary(quantity, [{:decimals, 6}])
+    price_str = :erlang.float_to_binary(price, [{:decimals, 2}])
+    side = if type == "ASK", do: "sell", else: "buy"
+    Logger.info("Place limit #{type} for #{q_str} at #{price_str}")
+    params = %{pair: pair, side: side, quantity: q_str, price: price_str, post_only: post_only}
+    {:ok, %{"id" => new_order_id}} = JsonUtils.retry_req(&CfValr.Api.post_limit_order/1, [params])
     new_order_id
   end
 
   def stop_order(order_id, price) do
     Logger.info("Cancel limit order #{order_id} at #{price}")
-    JsonUtils.retry_req(&CfValr.Api.stop_order/1, [order_id])
-    Process.sleep(400) #wait for balance to update after cancelling order
+    params = %{"orderId" => order_id, "pair" => "BTCZAR"} #TODO make pair variable
+    JsonUtils.retry_req(&CfValr.Api.delete_order/1, [params])
   end
 
   def list_open_orders(pair) do
-    {:ok, %{"orders" => orders}} = JsonUtils.retry_req(&CfValr.Api.list_orders/1 ,[[pair: pair, state: "PENDING"]])
-    orders && Enum.map(
-      orders,
-      fn (%{"order_id" => id, "limit_price" => price,  "creation_timestamp" => ts}) ->
-        {pricef, _} = Float.parse(price)
-        %{order_id: id, order_price: pricef, order_time: ts}
-      end
-    )
+    {:ok, orders} = JsonUtils.retry_req(&CfValr.Api.list_orders/0, [])
+    orders &&
+      Enum.filter(orders, &(&1["currencyPair"] == pair))
+      |> Enum.map(
+           fn (%{"orderId" => id, "price" => price, "createdAt" => datetime_str}) ->
+             {:ok, datetime, _} = DateTime.from_iso8601(datetime_str)
+             ts = DateTime.to_unix(datetime)
+             {pricef, _} = Float.parse(price)
+             %{order_id: id, order_price: pricef, order_time: ts}
+           end
+         )
   end
 
   def sum_trades(pair, since, _order_id) do
-    {:ok, %{"trades" => trades}} = JsonUtils.retry_req(&CfValr.Api.list_trades/1, [[pair: pair, since: since]])
-    get_traded_volume(trades)
+    {:ok, trades} = JsonUtils.retry_req(&CfValr.Api.get_trade_history/2, [pair, "10"])
+    get_traded_volume(trades, since)
   end
 
   #---------------------------------------------------------------------------------------------------------------------
@@ -73,16 +76,28 @@ defmodule CfValr.Mediate do
     )
   end
 
-  defp get_traded_volume(nil), do: %{"ASK" => 0, "BID" => 0}
-  defp get_traded_volume(trades) do
-    [ask, bid] = Enum.reduce(
-      trades,
-      [0, 0],
-      fn
-        (%{"type" => "ASK", "volume" => volume}, [vol_ask, vol_bid]) -> [vol_ask + to_float(volume), vol_bid]
-        (%{"type" => "BID", "volume" => volume}, [vol_ask, vol_bid]) -> [vol_ask, vol_bid + to_float(volume)]
-      end
-    )
+  defp get_traded_volume(nil, _), do: %{"ASK" => 0, "BID" => 0}
+  defp get_traded_volume(trades, since) do
+    [ask, bid] =
+      Enum.filter(
+        trades,
+        fn (%{"tradedAt" => dt_str} = trade) ->
+          {:ok, dt, 0} = DateTime.from_iso8601(dt_str)
+          ts = DateTime.to_unix(dt)
+          ts >= since
+        end
+      )
+      |> Enum.reduce(
+           [0, 0],
+           fn
+             (%{"side" => "sell", "quantity" => volume}, [vol_ask, vol_bid]) ->
+               {trade_vol, _rem_bin} = Float.parse(volume)
+               [vol_ask + trade_vol, vol_bid]
+             (%{"side" => "buy", "quantity" => volume}, [vol_ask, vol_bid]) ->
+               {trade_vol, _rem_bin} = Float.parse(volume)
+               [vol_ask, vol_bid + trade_vol]
+           end
+         )
     vol = %{"ASK" => ask, "BID" => bid}
     Logger.info("Traded vol: #{inspect vol}")
     vol
