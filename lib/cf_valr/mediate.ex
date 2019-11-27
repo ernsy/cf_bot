@@ -81,7 +81,7 @@ defmodule CfValr.Mediate do
     [ask, bid] =
       Enum.filter(
         trades,
-        fn (%{"tradedAt" => dt_str} = trade) ->
+        fn (%{"tradedAt" => dt_str}) ->
           {:ok, dt, 0} = DateTime.from_iso8601(dt_str)
           ts = DateTime.to_unix(dt)
           ts >= since

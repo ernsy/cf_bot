@@ -1,8 +1,8 @@
 defmodule CfBot.CC do
 
-  def start_luno(hodl_amt) do
+  def start_luno(hodl_amt, mode) do
     prep_luno(hodl_amt)
-    set_luno_hodl_mode()
+    set_luno_mode(mode)
   end
 
   def prep_luno(hodl_amt) do
@@ -28,16 +28,16 @@ defmodule CfBot.CC do
     CfBot.Statem.set_sell_amt(CfLuno, 0.0)
   end
 
-  def set_luno_hodl_mode() do
-    CfBot.Statem.set_mode(CfLuno, "hodl")
+  def set_luno_mode(mode) do
+    CfBot.Statem.set_mode(CfLuno, mode)
   end
 
-  def start_cb() do
-    prep_cb()
-    set_cb_buy_mode()
+  def start_cb(hodl_amt, mode) do
+    prep_cb(hodl_amt)
+    set_cb_mode(mode)
   end
 
-  def prep_cb() do
+  def prep_cb(hodl_amt) do
     DynamicSupervisor.start_child(
       CfBot.DynSup,
       {
@@ -60,8 +60,13 @@ defmodule CfBot.CC do
     CfBot.Statem.set_buy_amt(CfCb, 0.0)
   end
 
-  def set_cb_buy_mode do
-    CfBot.Statem.set_mode(CfCb,"buy")
+  def set_cb_buy_mode(mode) do
+    CfBot.Statem.set_mode(CfCb, mode)
+  end
+
+  def stop_dyn_sup_child() do
+    [{_,pid,_,_}]=DynamicSupervisor.which_children(CfBot.DynSup)
+    DynamicSupervisor.terminate_child(CfBot.DynSup,pid)
   end
 
 end
