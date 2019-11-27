@@ -2,8 +2,8 @@ defmodule CfValr.Mediate do
   require Logger
 
   def get_ticker(pair) do
-    {:ok, ticker} = JsonUtils.retry_req(&CfValr.Api.get_ticker/1, [pair])
-    ticker
+    {:ok, %{"askPrice" => ask, "bidPrice" => bid}} = JsonUtils.retry_req(&CfValr.Api.get_ticker/1, [pair])
+    %{"ask" => ask, "bid" => bid}
   end
 
   def get_avail_bal(currency) do
