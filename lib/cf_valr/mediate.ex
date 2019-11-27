@@ -2,8 +2,8 @@ defmodule CfValr.Mediate do
   require Logger
 
   def get_ticker(pair) do
-    {:ok, ticker} = JsonUtils.retry_req(&CfValr.Api.get_ticker/1, [pair])
-    ticker
+    {:ok, %{"askPrice" => ask, "bidPrice" => bid}} = JsonUtils.retry_req(&CfValr.Api.get_ticker/1, [pair])
+    %{"ask" => ask, "bid" => bid}
   end
 
   def get_avail_bal(currency) do
@@ -29,7 +29,7 @@ defmodule CfValr.Mediate do
 
   def post_order(pair, type, quantity, price, post_only) do
     q_str = :erlang.float_to_binary(quantity, [{:decimals, 6}])
-    price_str = :erlang.float_to_binary(price, [{:decimals, 2}])
+    price_str = trunc(price)
     side = if type == "ASK", do: "sell", else: "buy"
     Logger.info("Place limit #{type} for #{q_str} at #{price_str}")
     params = %{pair: pair, side: side, quantity: q_str, price: price_str, post_only: post_only}

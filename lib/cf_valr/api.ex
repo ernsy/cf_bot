@@ -23,13 +23,13 @@ defmodule CfValr.Api do
 
   def post_limit_order(%{side: _, quantity: _, price: _, pair: _} = params) do
     {:ok, body} = Jason.encode(params)
-    "/v1/orders/limit/"
+    "/v1/orders/limit"
     |> invoke_private_api("POST", body)
   end
 
   def delete_order(%{"orderId" => _, "pair" => _} = params) do
     {:ok, body} = Jason.encode(params)
-    "/v1/orders/order/"
+    "/v1/orders/order"
     |> invoke_private_api("DELETE", body)
   end
 
@@ -48,7 +48,7 @@ defmodule CfValr.Api do
   #---------------------------------------------------------------------------------------------------------------------
 
   defp invoke_public_api(path) do
-    Logger.debug("Luno public api path: #{inspect path}")
+    Logger.debug("Valr public api path: #{inspect path}")
     @valr_uri <> path
     |> HTTPoison.get()
   end
@@ -57,7 +57,7 @@ defmodule CfValr.Api do
   defp invoke_private_api(path, method, body \\ "") do
     url = @valr_uri <> path
     headers = get_auth_headers(method, path, body)
-    Logger.debug("CB private api v1 url: #{inspect url}")
+    Logger.debug("Valr private api v1 url: #{inspect url}")
     case method do
       "GET" -> HTTPoison.get(url, headers)
       "DELETE" -> HTTPoison.request(:delete, url, body, headers)
