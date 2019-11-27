@@ -25,6 +25,6 @@ config :logger,
        backends: [:console]
 config :logger,
        :console,
-       level: :info,
+       level: :debug,
        metadata: [:module, :line, :function]
 config :cf_bot, :cb_uri, "https://api-public.sandbox.pro.coinbase.com"
