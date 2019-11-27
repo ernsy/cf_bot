@@ -2,7 +2,7 @@ defmodule CfBot.CC do
 
   def start_luno(hodl_amt, mode) do
     prep_luno(hodl_amt)
-    set_luno_mode(mode)
+    set_mode(CfLuno, mode)
   end
 
   def prep_luno(hodl_amt) do
@@ -28,13 +28,9 @@ defmodule CfBot.CC do
     CfBot.Statem.set_sell_amt(CfLuno, 0.0)
   end
 
-  def set_luno_mode(mode) do
-    CfBot.Statem.set_mode(CfLuno, mode)
-  end
-
   def start_cb(hodl_amt, mode) do
     prep_cb(hodl_amt)
-    set_cb_mode(mode)
+    set_mode(CfCb, mode)
   end
 
   def prep_cb(hodl_amt) do
@@ -56,12 +52,12 @@ defmodule CfBot.CC do
       }
     )
     CfBot.Statem.set_mode(CfCb, "wait")
-    CfBot.Statem.set_hodl_amt(CfCb, "secondary", 0)
+    CfBot.Statem.set_hodl_amt(CfCb, "secondary", hodl_amt)
     CfBot.Statem.set_buy_amt(CfCb, 0.0)
   end
 
-  def set_cb_buy_mode(mode) do
-    CfBot.Statem.set_mode(CfCb, mode)
+  def set_mode(statem, mode) do
+    CfBot.Statem.set_mode(statem, mode)
   end
 
   def stop_dyn_sup_child() do
