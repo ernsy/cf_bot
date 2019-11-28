@@ -77,14 +77,14 @@ defmodule CfValr.Mediate do
   end
 
   defp get_traded_volume(nil, _), do: %{"ASK" => 0, "BID" => 0}
-  defp get_traded_volume(trades, since) do
+  defp get_traded_volume([%{"tradedAt" => latest_ts_str} | _] = trades, since) do
     [ask, bid] =
       Enum.filter(
         trades,
         fn (%{"tradedAt" => dt_str}) ->
           {:ok, dt, 0} = DateTime.from_iso8601(dt_str)
           ts = DateTime.to_unix(dt)
-          ts >= since
+          ts > since
         end
       )
       |> Enum.reduce(
@@ -98,7 +98,9 @@ defmodule CfValr.Mediate do
                [vol_ask, vol_bid + trade_vol]
            end
          )
-    vol = %{"ASK" => ask, "BID" => bid}
+    {:ok, latest_dt, 0} = DateTime.from_iso8601(latest_ts_str)
+    latest_ts = DateTime.to_unix(latest_dt)
+    vol = %{"ASK" => ask, "BID" => bid, "latest_ts" => latest_ts}
     Logger.info("Traded vol: #{inspect vol}")
     vol
   end

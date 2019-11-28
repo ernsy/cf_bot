@@ -220,7 +220,7 @@ defmodule CfBot.Statem do
     vol_bought = trades["BID"]
     new_sell_amt = sell_amt - vol_sold
     new_buy_amt = buy_amt - vol_bought
-    new_ts = :erlang.system_time(:millisecond)
+    new_ts =  trades["latest_ts"] || :erlang.system_time(:millisecond)
     new_data =
       %{data | order_id: nil, order_price: 0, sell_amt: new_sell_amt, buy_amt: new_buy_amt, order_time: new_ts}
     {:keep_state, new_data}
@@ -377,8 +377,10 @@ defmodule CfBot.Statem do
          %{order_time: old_ts, order_price: old_price, order_id: order_id, mode: mode, med_mod: med_mod, pair: pair}
        )
        when old_price == new_price do
-    traded_vol = med_mod.sum_trades(pair, old_ts, order_id)[type]
-    [ts, rem_vol, alt_vol] = get_return_vlaues(traded_vol, new_vol, alt_vol, mode)
+    sum_trades = med_mod.sum_trades(pair, old_ts, order_id)
+    ts = sum_trades["latest_ts"] || :erlang.system_time(:millisecond)
+    traded_vol = sum_trades[type]
+    [rem_vol, alt_vol] = get_return_vlaues(traded_vol, new_vol, alt_vol, mode)
     rem_vol_str = :erlang.float_to_binary(rem_vol, [{:decimals, 6}])
     Logger.info("Keep limit order #{order_id} remaining volume #{rem_vol_str} at #{old_price}")
     {:ok, [ts, rem_vol, alt_vol, order_id]}
@@ -401,8 +403,10 @@ defmodule CfBot.Statem do
          }
        ) do
     !is_nil(order_id) && med_mod.stop_order(order_id, old_price)
-    traded_vol = med_mod.sum_trades(pair, old_ts, order_id)[type]
-    [ts, rem_vol, alt_vol] = get_return_vlaues(traded_vol, new_vol, alt_vol, mode)
+    sum_trades = med_mod.sum_trades(pair, old_ts, order_id)
+    ts = sum_trades["latest_ts"] || :erlang.system_time(:millisecond)
+    traded_vol = sum_trades[type]
+    [rem_vol, alt_vol] = get_return_vlaues(traded_vol, new_vol, alt_vol, mode)
     prim_curr = String.slice(pair, 0, 3)
     sec_curr = String.slice(pair, -3, 3)
     [bal, adj_rem_vol] =
@@ -424,8 +428,7 @@ defmodule CfBot.Statem do
   defp get_return_vlaues(traded_vol, new_vol, alt_vol, mode) do
     rem_vol = max(new_vol - traded_vol, 0.0)
     alt_vol = if mode == "bot", do: alt_vol + traded_vol, else: alt_vol
-    ts = :erlang.system_time(:millisecond)
-    [ts, rem_vol, alt_vol]
+    [rem_vol, alt_vol]
   end
 
   def cancel_orders(nil, _mod), do: %{}
