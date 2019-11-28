@@ -59,17 +59,17 @@ defmodule CfBot.Statem do
           review_time: _,
           dt_pct: _,
           ut_pct: _,
-          stable_pct: _,
+          stable_pct: _
         } = init_map
       )
     do
+    prim_curr = String.slice(pair, 0, 3)
+    sec_curr = String.slice(pair, -3, 3)
     {:ok, :disk_storage} = :dets.open_file(:disk_storage, [type: :set])
     data = case :dets.lookup(:disk_storage, :data) do
       [data: %{sell_amt: _, prim_hodl_amt: _, buy_amt: _, sec_hodl_amt: _, mode: _} = data] ->
         data
       _ ->
-        prim_curr = String.slice(pair, 0, 3)
-        sec_curr = String.slice(pair, -3, 3)
         prim_hodl_amt = med_mod.get_avail_bal(prim_curr)
         sec_hodl_amt = med_mod.get_avail_bal(sec_curr)
         %{sell_amt: 0, prim_hodl_amt: prim_hodl_amt, buy_amt: 0, sec_hodl_amt: sec_hodl_amt, mode: "manual"}
@@ -85,6 +85,10 @@ defmodule CfBot.Statem do
     {:ok, [oracle_price, datetime]} = get_oracle_price(ref_pair)
     queue = :queue.new
     maker_fee = med_mod.get_maker_fee()
+    sell_amt = data[:sell_amt]
+    hodl_amt  = init_map[:prim_hodl_amt]
+    new_sell_amt = if init_map[:mode] == "hodl" and sell_amt <= 0 and hodl_amt,
+                      do: max(med_mod.get_avail_bal(prim_curr) - hodl_amt, 0), else: sell_amt
     init_data = %{
       oracle_queue: {queue, 0},
       oracle_ref: {oracle_price, datetime},
@@ -92,7 +96,8 @@ defmodule CfBot.Statem do
       order_id: nil,
       order_price: 0,
       order_time: :erlang.system_time(:millisecond),
-      fee: maker_fee
+      fee: maker_fee,
+      sell_amt: new_sell_amt
     }
     new_data = Map.merge(data, init_data)
                |> Map.merge(init_map)
@@ -273,11 +278,6 @@ defmodule CfBot.Statem do
     {:next_state, next_state, %{data | sell_amt: new_sell_amt, buy_amt: new_buy_amt}, next_action}
   end
 
-  defp get_mode_sell_amt(%{sell_amt: sell_amt, pair: pair, prim_hodl_amt: hodl_amt, med_mod: med_mod, mode: "hodl"})
-       when sell_amt <= 0 do
-    prim_curr = String.slice(pair, 0, 3)
-    max(med_mod.get_avail_bal(prim_curr) - hodl_amt, 0)
-  end
   defp get_mode_sell_amt(%{sell_amt: sell_amt}), do: sell_amt
 
   defp get_mode_buy_amt(

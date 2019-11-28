@@ -25,7 +25,6 @@ defmodule CfCb.TestMed do
     CfCb.Mediate.get_ticker(product_id)
   end
 
-
   def get_maker_fee() do
     CfCb.Mediate.get_maker_fee()
   end
