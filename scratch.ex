@@ -9,11 +9,11 @@ CfBot.Statem.set_hodl_amt(CfCb, "secondary", 2500)
 
 CfBot.CC.prep_luno(0.359)
 
-CfBot.CC.start_luno(0.3495, "hodl")
+CfBot.CC.start_luno(0.3444, "hodl")
 CfBot.Statem.set_hodl_amt(CfLuno, "primary", 0.4687)
 CfBot.Statem.set_mode(CfLuno, "sell")
 
-CfBot.CC.start_valr(0.0048, "hodl")
+CfBot.CC.start_valr(0.1, "hodl")
 CfBot.Statem.set_hodl_amt(CfValr, "primary", 0.009)
 
 CfLuno.Mediate.get_avail_bal("XBT")
