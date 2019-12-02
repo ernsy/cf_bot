@@ -77,8 +77,8 @@ defmodule CfCb.Mediate do
     )
   end
 
-  defp get_traded_volume(nil, _), do: %{"ASK" => 0, "BID" => 0}
-  defp get_traded_volume(fills, since) do
+  defp get_traded_volume([], _), do: %{"ASK" => 0, "BID" => 0}
+  defp get_traded_volume([%{"created_at" => latest_ts_str} | _] = fills, since) do
     [ask, bid] =
       Enum.map(
         fills,
@@ -91,17 +91,19 @@ defmodule CfCb.Mediate do
       |> Enum.reduce(
            [0, 0],
            fn
-             (%{"side" => "sell", "size" => volume, :order_time => ts}, [vol_ask, vol_bid]) when ts >= since ->
+             (%{"side" => "sell", "size" => volume, :order_time => ts}, [vol_ask, vol_bid]) when ts > since ->
                {trade_vol, _rem_bin} = Float.parse(volume)
                [vol_ask + trade_vol, vol_bid]
-             (%{"side" => "buy", "size" => volume, :order_time => ts}, [vol_ask, vol_bid]) when ts >= since ->
+             (%{"side" => "buy", "size" => volume, :order_time => ts}, [vol_ask, vol_bid]) when ts > since ->
                {trade_vol, _rem_bin} = Float.parse(volume)
                [vol_ask, vol_bid + trade_vol]
              (_, [vol_ask, vol_bid]) ->
                [vol_ask, vol_bid]
            end
          )
-    vol = %{"ASK" => ask, "BID" => bid}
+    {:ok, latest_dt, 0} = DateTime.from_iso8601(latest_ts_str)
+    latest_ts = DateTime.to_unix(latest_dt)
+    vol = %{"ASK" => ask, "BID" => bid, "latest_ts" => latest_ts}
     Logger.info("Traded vol: #{inspect vol}")
     vol
   end

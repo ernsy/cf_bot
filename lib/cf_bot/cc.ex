@@ -56,7 +56,7 @@ defmodule CfBot.CC do
           pair: "BTCZAR",
           ref_pair: "BTC-USD",
           min_incr: 1,
-          review_time: 6000,
+          review_time: 7000,
           dt_pct: 0.002,
           ut_pct: 0.002,
           stable_pct: 0.0005,
