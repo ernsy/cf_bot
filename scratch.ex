@@ -9,13 +9,13 @@ CfBot.Statem.set_hodl_amt(CfCb, "secondary", 0)
 
 CfBot.CC.prep_luno(0.359)
 
-CfBot.CC.start_luno(0.21342675, "hodl")
+CfBot.CC.start_luno(0.13838520, "hodl")
 CfBot.Statem.set_hodl_amt(CfLuno, "primary", 0.4687)
 CfBot.Statem.set_sell_amt(CfLuno, 0.07949730796)
 CfBot.Statem.set_mode(CfLuno, "sell")
 CfBot.Statem.set_mode(CfLuno, "hodl")
 
-CfBot.CC.start_valr(0.20241971, "hodl")
+CfBot.CC.start_valr(0.05104844, "hodl")
 CfBot.Statem.set_sell_amt(CfValr, 0.09061833)
 
 CfBot.Statem.set_hodl_amt(CfValr, "primary", 0.0)
@@ -23,6 +23,8 @@ CfBot.Statem.set_sell_amt(CfValr, 0.07949730796)
 CfBot.Statem.set_mode(CfValr, "sell")
 
 CfLuno.Mediate.get_avail_bal("XBT")
+CfValr.Mediate.get_avail_bal("BTC")
+CfValr.Api.balances()
 CfBot.Statem.resume(CfLuno)
 
 

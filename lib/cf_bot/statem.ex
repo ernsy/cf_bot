@@ -295,7 +295,7 @@ defmodule CfBot.Statem do
     sec_curr = String.slice(pair, -3, 3)
     {bid_price, _} = med_mod.get_ticker(pair)["bid"]
                      |> Float.parse()
-    (med_mod.get_avail_bal(sec_curr) - hodl_amt) / ((bid_price + min_incr) * (1 + fee)) - 0.0001
+    (med_mod.get_avail_bal(sec_curr) - hodl_amt) / ((bid_price + min_incr) * (1 + fee)) - 0.000001
   end
   defp get_mode_buy_amt(%{buy_amt: buy_amt}), do: buy_amt
 
@@ -414,7 +414,7 @@ defmodule CfBot.Statem do
         [med_mod.get_avail_bal(prim_curr), rem_vol]
       else
         bal = med_mod.get_avail_bal(sec_curr)
-        adj_rem_vol = min(rem_vol, (bal - hodl_amt) / ((new_price + min_incr) * (1 + fee)))
+        adj_rem_vol = min(rem_vol, (bal - hodl_amt) / ((new_price + min_incr) * (1 + fee))- 0.000001)
         [bal, adj_rem_vol]
       end
     if bal > hodl_amt and adj_rem_vol >= @min_order_vol do
