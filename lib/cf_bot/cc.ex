@@ -65,6 +65,7 @@ defmodule CfBot.CC do
         }
       }
     )
+    CfBot.Statem.set_mode(CfValr, "sell")
   end
 
   def stop_dyn_sup_child() do

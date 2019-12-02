@@ -9,11 +9,13 @@ defmodule CfValr.Mediate do
   def get_avail_bal(currency) do
     {:ok, balances} =
       JsonUtils.retry_req(&CfValr.Api.balances/0, [])
-    %{"available" => avail_str} =
+    %{"available" => avail_str, "reserved" => res_str} =
       Enum.find(balances, fn (%{"currency" => curr}) -> curr == currency end)
     {avail_bal, _rem_bin} = Float.parse(avail_str)
-    Logger.info("Available #{currency} balance: #{avail_bal}")
-    avail_bal
+    {res_bal, _rem_bin} = Float.parse(res_str)
+    total_avail = avail_bal + res_bal
+    Logger.info("Available #{currency} balance: #{total_avail}")
+    total_avail
   end
 
   def get_maker_fee() do
