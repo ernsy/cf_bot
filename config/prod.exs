@@ -31,7 +31,7 @@ config :logger,
        level: :info
 
 config :logger, :console,
-       level: :info,
-       metadata: [:module, :line, :function]
+       level: :info
+       #metadata: [:module, :line, :function]
 
 config :cf_bot, :cb_uri, "https://api.pro.coinbase.com"
