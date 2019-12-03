@@ -58,34 +58,24 @@ defmodule CfValr.Mediate do
          )
   end
 
+  def sum_trades(_product_id, _since, _, true), do: %{"ASK" => 0, "BID" => 0}
   def sum_trades(pair, since, _order_id) do
     {:ok, trades} = JsonUtils.retry_req(&CfValr.Api.get_trade_history/2, [pair, "10"])
     get_traded_volume(trades, since)
   end
 
   def handle_ws_msg(%{"type" => "NEW_TRADE", "currencyPairSymbol" => "BTCZAR", "data" => data} = msg, state) do
+    Logger.warn("New Valr trade #{inspect msg}")
     %{"quantity" => vol, "tradedAt" => date_time_str, "takerSide" => taker_side} = data
     ts = convert_date_time(date_time_str)
-    side = if taker_side 
+    side = if taker_side == "buy", do: "sell", else: "buy"
     med_data = %{"msg_type" => "NEW_TRADE", "volume" => vol, "timestamp" => ts, "side" => side}
     CfBot.Statem.ws_update(CfValr, med_data)
     {:ok, state}
   end
 
-  #  {
-  #"type": "NEW_TRADE",
-  #"currencyPairSymbol": "BTCZAR",
-  #"data": {
-  #"price": "9500",
-  #          "quantity": "0.001",
-  #                            "currencyPair": "BTCZAR",
-  #"tradedAt": "2019-04-25T19:51:55.393Z",
-  #"takerSide": "buy"
-  #}
-  #}
-
   def handle_ws_msg(msg, state) do
-    IO.inspect(msg, label: "Unhandled Valr WS msg")
+    Logger.warn("Unhandled Valr WS msg #{inspect msg}")
     {:ok, state}
   end
 
@@ -131,7 +121,7 @@ defmodule CfValr.Mediate do
   end
 
   defp convert_date_time(dt_str) do
-    {:ok, dt, 0} = DateTime.from_iso8601(date_time_str)
+    {:ok, dt, 0} = DateTime.from_iso8601(dt_str)
     DateTime.to_unix(dt)
   end
 

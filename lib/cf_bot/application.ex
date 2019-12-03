@@ -16,6 +16,7 @@ defmodule CfBot.Application do
       #        %{med_mod: CfCb.Mediate, pair: "BTC-GBP", oracle_pair: "BTC-USD", min_increment: 0.01, review_time: 50}
       #      },
       {DynamicSupervisor, strategy: :one_for_one, name: CfBot.DynSup},
+      {DynamicSupervisor, strategy: :one_for_one, name: CfBot.WsSup},
       {CfCb.WsClient, [["BTC-USD"], &CfBot.Statem.oracle_update/2, [CfCb, CfLuno, CfValr]]}
     ]
 

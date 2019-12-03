@@ -46,7 +46,7 @@ defmodule CfBot.Statem do
     GenStateMachine.cast(name, {:set_data, :mode, mode})
   end
 
-  def ws_update(name,msg) do
+  def ws_update(name, msg) do
     GenStateMachine.cast(name, {:ws_msg, msg})
   end
 
@@ -54,19 +54,10 @@ defmodule CfBot.Statem do
   # callbacks
   #---------------------------------------------------------------------------------------------------------------------
 
-  def init(
-        %{
-          med_mod: med_mod,
-          pair: pair,
-          ref_pair: ref_pair,
-          min_incr: _,
-          review_time: _,
-          dt_pct: _,
-          ut_pct: _,
-          stable_pct: _
-        } = init_map
-      )
-    do
+  def init(%{min_incr: _, review_time: _, dt_pct: _, ut_pct: _, stable_pct: _} = init_map) do
+    %{name: name, med_mod: med_mod, pair: pair, ref_pair: ref_pair, ws: ws} = init_map
+    ws_mod = Module.concat([name,WsClient])
+    ws && DynamicSupervisor.start_child(CfBot.WsSup, {ws_mod, [med_mod]})
     prim_curr = String.slice(pair, 0, 3)
     sec_curr = String.slice(pair, -3, 3)
     {:ok, :disk_storage} = :dets.open_file(:disk_storage, [type: :set])
@@ -90,8 +81,8 @@ defmodule CfBot.Statem do
     queue = :queue.new
     maker_fee = med_mod.get_maker_fee()
     sell_amt = data[:sell_amt]
-    hodl_amt  = init_map[:prim_hodl_amt]
-    new_sell_amt = if init_map[:mode] == "hodl"  and hodl_amt,
+    hodl_amt = init_map[:prim_hodl_amt]
+    new_sell_amt = if init_map[:mode] == "hodl" and hodl_amt,
                       do: max(med_mod.get_avail_bal(prim_curr) - hodl_amt, 0), else: sell_amt
     init_data = %{
       oracle_queue: {queue, 0},
@@ -128,21 +119,17 @@ defmodule CfBot.Statem do
     {:keep_state, new_data}
   end
 
-  def handle_event(
-        :cast,
-        {:oracle_update, %{"price" => price, "time" => time}},
-        state,
-        %{
-          oracle_queue: {queue, length},
-          sell_amt: sell_amt,
-          buy_amt: buy_amt,
-          oracle_ref: {old_price, old_datetime},
-          dt_pct: dt_pct,
-          ut_pct: ut_pct,
-          stable_pct: s_pct,
-          mode: mode
-        } = data
-      ) do
+  def handle_event(:cast, {:oracle_update, %{"price" => price, "time" => time}}, state, data) do
+    %{
+      oracle_queue: {queue, length},
+      sell_amt: sell_amt,
+      buy_amt: buy_amt,
+      oracle_ref: {old_price, old_datetime},
+      dt_pct: dt_pct,
+      ut_pct: ut_pct,
+      stable_pct: s_pct,
+      mode: mode
+    } = data
     {pricef, _rem_bin} = Float.parse(price)
     {:ok, datetime, _} = DateTime.from_iso8601(time)
     seconds_diff = DateTime.diff(datetime, old_datetime)
@@ -171,7 +158,7 @@ defmodule CfBot.Statem do
     end
   end
 
-  def handle_event(event_type, {action, post_actions}, state, %{mode: mode, review_time: review_time} = data)
+  def handle_event(event_type, {action, post_actions}, state, %{mode: mode} = data)
       when
         (event_type == :internal or event_type == :state_timeout) and (action == :limit_sell or action == :limit_buy) do
     [vol_key, alt_vol_key, hodl_amt_key, type] =
@@ -186,7 +173,7 @@ defmodule CfBot.Statem do
       hodl_amt = data[hodl_amt_key]
       vol_before_order = if state == :quick_sell or state == :quick_buy, do: 0, else: order_vol
       {:ok, new_price} = calc_limit_order_price(vol_before_order, order_vol, type, data)
-      {:ok, [timestamp, rem_vol, alt_vol, new_order_id]} =
+      {:ok, [timestamp, rem_vol, alt_vol, new_order_id, review_time]} =
         place_limit_order(new_price, order_vol, alt_vol, hodl_amt, type, data)
       new_data =
         %{
@@ -200,31 +187,28 @@ defmodule CfBot.Statem do
       :ok = :dets.insert(:disk_storage, {:data, new_data})
       {:keep_state, new_data, [{:state_timeout, review_time, {action, []}} | post_actions]}
     else
-      next_state = if mode == "hodl" or mode == "buy" do
-        :wait_stable
-      else
-        state
-      end
+      next_state =
+        if mode == "hodl" or mode == "buy" do
+          :wait_stable
+        else
+          state
+        end
       Logger.warn("Volume below minimum, next state: #{next_state}")
       {:next_state, next_state, %{data | vol_key => 0, :order_price => 0}, []}
     end
   end
 
-  def handle_event(
-        :internal,
-        :cancel_orders,
-        _state,
-        %{order_time: order_ts, sell_amt: sell_amt, buy_amt: buy_amt, med_mod: mod, pair: pair, order_id: id}
-        = data
-      ) do
+  def handle_event(:internal, :cancel_orders, _state, data) do
+    %{order_time: order_ts,  order_id: order_id} = data
+    %{sell_amt: sell_amt, buy_amt: buy_amt, med_mod: mod, pair: pair, ws: ws} = data
     orders = mod.list_open_orders(pair)
     %{} = cancel_orders(orders, mod)
-    trades = mod.sum_trades(pair, order_ts, id)
+    trades = mod.sum_trades(pair, order_ts, order_id, ws)
     vol_sold = trades["ASK"]
     vol_bought = trades["BID"]
     new_sell_amt = sell_amt - vol_sold
     new_buy_amt = buy_amt - vol_bought
-    new_ts =  trades["latest_ts"] || :erlang.system_time(:millisecond)
+    new_ts = trades["latest_ts"] || :erlang.system_time(:millisecond)
     new_data =
       %{data | order_id: nil, order_price: 0, sell_amt: new_sell_amt, buy_amt: new_buy_amt, order_time: new_ts}
     {:keep_state, new_data}
@@ -234,17 +218,17 @@ defmodule CfBot.Statem do
     :keep_state_and_data
   end
 
-  def handle_event(:cast, {:ws_update, %{"msg_type" => "NEW_TRADE"} = msg}, _state, %{sell_amt: sell_amt} = data) do
-    %{"volume" => vol, "timestamp" => ts, "takerSide" => side} = msg
-    %{sell_amt: sell_amt} = data
-  new_data = if side == "buy" do
-    %{sell_amt: sell_amt} = data
-  %{data | sell_amt: sell_amt - vol}
-  else
-    %{sell_amt: buy_amt} = data
-  %{data | buy_amt: buy_amt - vol}
-  end
-  {:keep_state, new_data}
+  def handle_event(:cast, {:ws_update, %{"msg_type" => "NEW_TRADE"} = msg}, _state, data) do
+    %{"volume" => vol, "side" => side} = msg
+    new_data =
+      if side == "buy" do
+        %{sell_amt: sell_amt} = data
+        %{data | sell_amt: sell_amt - vol}
+      else
+        %{sell_amt: buy_amt} = data
+        %{data | buy_amt: buy_amt - vol}
+      end
+    {:keep_state, new_data}
   end
 
   def handle_event(event_type, event_content, state, data) do
@@ -310,12 +294,8 @@ defmodule CfBot.Statem do
   end
   defp get_mode_buy_amt(%{buy_amt: buy_amt}), do: buy_amt
 
-  defp calc_limit_order_price(
-         0,
-         _curr_limit_vol,
-         type,
-         %{med_mod: mod, pair: pair, min_incr: min_incr}
-       ) do
+  defp calc_limit_order_price(0, _curr_limit_vol, type, data) do
+    %{med_mod: mod, pair: pair, min_incr: min_incr} = data
     %{"bid" => bid, "ask" => ask} = mod.get_ticker(pair)
     Logger.info("Bid price:" <> bid <> " ask price:" <> ask)
     {bidf, _} = Float.parse(bid)
@@ -326,12 +306,8 @@ defmodule CfBot.Statem do
       {:ok, calc_best_price(bidf, bidf, askf, min_incr, type)}
     end
   end
-  defp calc_limit_order_price(
-         pre_vol,
-         curr_vol,
-         type,
-         %{order_price: curr_price, med_mod: mod, pair: pair, min_incr: min_incr}
-       ) do
+  defp calc_limit_order_price(pre_vol, curr_vol, type, data) do
+    %{order_price: curr_price, med_mod: mod, pair: pair, min_incr: min_incr} = data
     %{"asks" => asks, "bids" => bids} = mod.get_orderbook(pair)
     {type_orders, alt_orders} = if type == "ASK", do: {asks, bids}, else: {bids, asks}
     Enum.reduce_while(
@@ -379,42 +355,23 @@ defmodule CfBot.Statem do
     min(bid_price - min_incr, order_price) + min_incr
   end
 
-  defp place_limit_order(
-         new_price,
-         new_vol,
-         alt_vol,
-         _hodl_amt,
-         type,
-         %{order_time: old_ts, order_price: old_price, order_id: order_id, mode: mode, med_mod: med_mod, pair: pair}
-       )
+  defp place_limit_order(new_price, new_vol, alt_vol, _hodl_amt, type, %{order_price: old_price} = data)
        when old_price == new_price do
-    sum_trades = med_mod.sum_trades(pair, old_ts, order_id)
+    %{order_time: old_ts, order_id: order_id} =data
+    %{mode: mode, med_mod: med_mod, pair: pair, ws: ws, short_review_time: r_time} = data
+    sum_trades = med_mod.sum_trades(pair, old_ts, order_id, ws)
     ts = sum_trades["latest_ts"] || :erlang.system_time(:millisecond)
     traded_vol = sum_trades[type]
     [rem_vol, alt_vol] = get_return_values(traded_vol, new_vol, alt_vol, mode)
     rem_vol_str = :erlang.float_to_binary(rem_vol, [{:decimals, 6}])
     Logger.info("Keep limit order #{order_id} remaining volume #{rem_vol_str} at #{old_price}")
-    {:ok, [ts, rem_vol, alt_vol, order_id]}
+    {:ok, [ts, rem_vol, alt_vol, order_id, 0]}
   end
-  defp place_limit_order(
-         new_price,
-         new_vol,
-         alt_vol,
-         hodl_amt,
-         type,
-         %{
-           order_time: old_ts,
-           order_price: old_price,
-           order_id: order_id,
-           mode: mode,
-           med_mod: med_mod,
-           pair: pair,
-           min_incr: min_incr,
-           fee: fee
-         }
-       ) do
+  defp place_limit_order(new_price, new_vol, alt_vol, hodl_amt, type, data) do
+    %{order_time: old_ts, order_price: old_price, order_id: order_id} = data
+    %{mode: mode, med_mod: med_mod, pair: pair, min_incr: min_incr, fee: fee, ws: ws, long_review_time: r_time} = data
     !is_nil(order_id) && med_mod.stop_order(order_id, old_price)
-    sum_trades = med_mod.sum_trades(pair, old_ts, order_id)
+    sum_trades = med_mod.sum_trades(pair, old_ts, order_id, ws)
     ts = sum_trades["latest_ts"] || :erlang.system_time(:millisecond)
     traded_vol = sum_trades[type]
     [rem_vol, alt_vol] = get_return_values(traded_vol, new_vol, alt_vol, mode)
@@ -425,14 +382,14 @@ defmodule CfBot.Statem do
         [med_mod.get_avail_bal(prim_curr), rem_vol]
       else
         bal = med_mod.get_avail_bal(sec_curr)
-        adj_rem_vol = min(rem_vol, (bal - hodl_amt) / ((new_price + min_incr) * (1 + fee))- 0.000001)
+        adj_rem_vol = min(rem_vol, (bal - hodl_amt) / ((new_price + min_incr) * (1 + fee)) - 0.000001)
         [bal, adj_rem_vol]
       end
     if bal > hodl_amt and adj_rem_vol >= @min_order_vol do
       new_order_id = med_mod.post_order(pair, type, adj_rem_vol, new_price, "true")
-      {:ok, [ts, adj_rem_vol, alt_vol, new_order_id]}
+      {:ok, [ts, adj_rem_vol, alt_vol, new_order_id, r_time]}
     else
-      {:ok, [ts, 0, alt_vol, order_id]}
+      {:ok, [ts, 0, alt_vol, order_id, r_time]}
     end
   end
 

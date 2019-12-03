@@ -57,8 +57,9 @@ defmodule CfCb.Mediate do
     )
   end
 
-  def sum_trades(_product_id, _since, nil), do: %{"ASK" => 0, "BID" => 0}
-  def sum_trades(_product_id, since, order_id) do
+  def sum_trades(_product_id, _since, nil, _), do: %{"ASK" => 0, "BID" => 0}
+  def sum_trades(_product_id, _since, _, true), do: %{"ASK" => 0, "BID" => 0}
+  def sum_trades(_product_id, since, order_id, false) do
     {:ok, fills} = JsonUtils.retry_req(&CfCb.Api.get_fills/1, [[order_id: order_id]])
     get_traded_volume(fills, since)
   end

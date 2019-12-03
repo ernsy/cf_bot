@@ -9,16 +9,6 @@ defmodule CfValr.WsClient do
     {:ok, pid}
   end
 
-  def handle_connect(_conn, state) do
-    IO.puts("connected!")
-    {:ok, state}
-  end
-
-  def handle_disconnect(_conn, state) do
-    IO.puts("disconnected")
-    {:reconnect, state}
-  end
-
   def handle_frame({:text, body}, %{cb_fun: cb_fun} = state) do
     Jason.decode!(body)
     |> cb_fun.handle_ws_msg(state)
