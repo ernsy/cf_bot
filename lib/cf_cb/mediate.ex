@@ -57,8 +57,9 @@ defmodule CfCb.Mediate do
     )
   end
 
-  def sum_trades(_product_id, _since, nil), do: %{"ASK" => 0, "BID" => 0}
-  def sum_trades(_product_id, since, order_id) do
+  def sum_trades(_product_id, _since, nil, _), do: %{"ASK" => 0, "BID" => 0}
+  def sum_trades(_product_id, _since, _, true), do: %{"ASK" => 0, "BID" => 0}
+  def sum_trades(_product_id, since, order_id, false) do
     {:ok, fills} = JsonUtils.retry_req(&CfCb.Api.get_fills/1, [[order_id: order_id]])
     get_traded_volume(fills, since)
   end
@@ -82,7 +83,7 @@ defmodule CfCb.Mediate do
     [ask, bid] =
       Enum.filter(
         fills,
-        fn (%{"created_at" => dt_str} = fill) ->
+        fn (%{"created_at" => dt_str}) ->
           {:ok, dt, 0} = DateTime.from_iso8601(dt_str)
           ts = DateTime.to_unix(dt)
           ts > since

@@ -11,16 +11,19 @@ defmodule CfBot.CC do
           pair: "BTC-GBP",
           ref_pair: "BTC-USD",
           min_incr: 0.01,
-          review_time: 50,
+          short_review_time: 50,
+          long_review_time: 50,
           dt_pct: 0.0005,
           ut_pct: 0.0005,
-          stable_pct: 0.0001 ,
-          mode: mode
+          stable_pct: 0.0001,
+          mode: mode,
+          ws: false
         }
       }
     )
     CfBot.Statem.set_hodl_amt(CfCb, "secondary", hodl_amt)
     CfBot.Statem.set_buy_amt(CfCb, 0.0)
+    CfBot.Statem.set_sell_amt(CfCb, 0.0)
   end
 
   def start_luno(hodl_amt, mode) do
@@ -34,15 +37,18 @@ defmodule CfBot.CC do
           pair: "XBTZAR",
           ref_pair: "BTC-USD",
           min_incr: 1,
-          review_time: 2000,
-          dt_pct: 0.001,
-          ut_pct: 0.001,
+          long_review_time: 3000,
+          short_review_time: 2000,
+          dt_pct: 0.0015,
+          ut_pct: 0.0015,
           stable_pct: 0.00025,
           prim_hodl_amt: hodl_amt,
-          mode: mode
+          mode: mode,
+          ws: false
         }
       }
     )
+    CfBot.Statem.set_buy_amt(CfLuno, 0.0)
   end
 
   def start_valr(hodl_amt, mode) do
@@ -56,16 +62,19 @@ defmodule CfBot.CC do
           pair: "BTCZAR",
           ref_pair: "BTC-USD",
           min_incr: 1,
-          review_time: 7000,
+          long_review_time: 4000,
+          short_review_time: 1000,
           dt_pct: 0.001,
           ut_pct: 0.001,
           stable_pct: 0.00025,
           prim_hodl_amt: hodl_amt,
-          mode: mode
+          mode: mode,
+          ws: true
         }
       }
     )
     CfBot.Statem.set_mode(CfValr, "sell")
+    CfBot.Statem.set_buy_amt(CfValr, 0.0)
   end
 
   def stop_dyn_sup_child() do
