@@ -46,6 +46,10 @@ defmodule CfBot.Statem do
     GenStateMachine.cast(name, {:set_data, :mode, mode})
   end
 
+  def ws_update(name,msg) do
+    GenStateMachine.cast(name, {:ws_msg, msg})
+  end
+
   #---------------------------------------------------------------------------------------------------------------------
   # callbacks
   #---------------------------------------------------------------------------------------------------------------------
@@ -230,10 +234,17 @@ defmodule CfBot.Statem do
     :keep_state_and_data
   end
 
-  def handle_event(event_type, {id, _} = event_content, state, data)
-      when (id == :limit_buy or id == :limit_sell) and state != :wait_stable do
-    Logger.info("No sell or buy amount:#{inspect [type: event_type, content: event_content, state: state, data: data]}")
-    :keep_state_and_data
+  def handle_event(:cast, {:ws_update, %{"msg_type" => "NEW_TRADE"} = msg}, _state, %{sell_amt: sell_amt} = data) do
+    %{"volume" => vol, "timestamp" => ts, "takerSide" => side} = msg
+    %{sell_amt: sell_amt} = data
+  new_data = if side == "buy" do
+    %{sell_amt: sell_amt} = data
+  %{data | sell_amt: sell_amt - vol}
+  else
+    %{sell_amt: buy_amt} = data
+  %{data | buy_amt: buy_amt - vol}
+  end
+  {:keep_state, new_data}
   end
 
   def handle_event(event_type, event_content, state, data) do
@@ -380,7 +391,7 @@ defmodule CfBot.Statem do
     sum_trades = med_mod.sum_trades(pair, old_ts, order_id)
     ts = sum_trades["latest_ts"] || :erlang.system_time(:millisecond)
     traded_vol = sum_trades[type]
-    [rem_vol, alt_vol] = get_return_vlaues(traded_vol, new_vol, alt_vol, mode)
+    [rem_vol, alt_vol] = get_return_values(traded_vol, new_vol, alt_vol, mode)
     rem_vol_str = :erlang.float_to_binary(rem_vol, [{:decimals, 6}])
     Logger.info("Keep limit order #{order_id} remaining volume #{rem_vol_str} at #{old_price}")
     {:ok, [ts, rem_vol, alt_vol, order_id]}
@@ -406,7 +417,7 @@ defmodule CfBot.Statem do
     sum_trades = med_mod.sum_trades(pair, old_ts, order_id)
     ts = sum_trades["latest_ts"] || :erlang.system_time(:millisecond)
     traded_vol = sum_trades[type]
-    [rem_vol, alt_vol] = get_return_vlaues(traded_vol, new_vol, alt_vol, mode)
+    [rem_vol, alt_vol] = get_return_values(traded_vol, new_vol, alt_vol, mode)
     prim_curr = String.slice(pair, 0, 3)
     sec_curr = String.slice(pair, -3, 3)
     [bal, adj_rem_vol] =
@@ -425,7 +436,7 @@ defmodule CfBot.Statem do
     end
   end
 
-  defp get_return_vlaues(traded_vol, new_vol, alt_vol, mode) do
+  defp get_return_values(traded_vol, new_vol, alt_vol, mode) do
     rem_vol = max(new_vol - traded_vol, 0.0)
     alt_vol = if mode == "bot", do: alt_vol + traded_vol, else: alt_vol
     [rem_vol, alt_vol]
