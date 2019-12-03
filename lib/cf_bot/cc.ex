@@ -35,9 +35,9 @@ defmodule CfBot.CC do
           ref_pair: "BTC-USD",
           min_incr: 1,
           review_time: 2000,
-          dt_pct: 0.002,
-          ut_pct: 0.002,
-          stable_pct: 0.0005,
+          dt_pct: 0.001,
+          ut_pct: 0.001,
+          stable_pct: 0.00025,
           prim_hodl_amt: hodl_amt,
           mode: mode
         }
@@ -57,9 +57,9 @@ defmodule CfBot.CC do
           ref_pair: "BTC-USD",
           min_incr: 1,
           review_time: 7000,
-          dt_pct: 0.002,
-          ut_pct: 0.002,
-          stable_pct: 0.0005,
+          dt_pct: 0.001,
+          ut_pct: 0.001,
+          stable_pct: 0.00025,
           prim_hodl_amt: hodl_amt,
           mode: mode
         }
