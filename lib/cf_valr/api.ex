@@ -33,7 +33,7 @@ defmodule CfValr.Api do
     |> invoke_private_api("DELETE", body)
   end
 
-    def list_orders() do
+  def list_orders() do
     "/v1/orders/open"
     |> invoke_private_api("GET")
   end
@@ -41,6 +41,20 @@ defmodule CfValr.Api do
   def get_trade_history(pair, limit) do
     "/v1/account/" <> pair <> "/tradehistory?limit=" <> limit
     |> invoke_private_api("GET")
+  end
+
+  def get_auth_headers(method, url_path, body) do
+    key = System.get_env("valr_api_key")
+    secret = System.get_env("valr_api_secret")
+    ts = :os.system_time(:milli_seconds)
+    msg = "#{ts}#{method}#{url_path}#{body}"
+    sign = :crypto.hmac(:sha512, secret, msg)
+           |> Base.encode16(case: :lower)
+    [
+      {"X-VALR-API-KEY", key},
+      {"X-VALR-SIGNATURE", sign},
+      {"X-VALR-TIMESTAMP", ts}
+    ]
   end
 
   #---------------------------------------------------------------------------------------------------------------------
@@ -63,19 +77,5 @@ defmodule CfValr.Api do
       "DELETE" -> HTTPoison.request(:delete, url, body, headers)
       "POST" -> HTTPoison.post(url, body, headers)
     end
-  end
-
-  def get_auth_headers(method, url_path, body) do
-    key = System.get_env("valr_api_key")
-    secret = System.get_env("valr_api_secret")
-    ts = :os.system_time(:milli_seconds)
-    msg = "#{ts}#{method}#{url_path}#{body}"
-    sign = :crypto.hmac(:sha512, secret, msg)
-           |> Base.encode16(case: :lower)
-    [
-      {"X-VALR-API-KEY", key},
-      {"X-VALR-SIGNATURE", sign},
-      {"X-VALR-TIMESTAMP", ts}
-    ]
   end
 end

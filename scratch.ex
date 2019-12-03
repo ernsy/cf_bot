@@ -32,6 +32,7 @@ CfBot.Statem.resume(CfLuno)
 c("lib/cf_cb/mediate.ex")
 c("lib/cf_luno/mediate.ex")
 c("lib/cf_bot/statem.ex")
+c("lib/json_utils.ex")
 
 [{_,pid,_,_}]=Supervisor.which_children(CfBot.DynSup)
 Supervisor.terminate_child(CfBot.DynSup,pid)
