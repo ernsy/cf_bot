@@ -54,7 +54,7 @@ defmodule CfBot.Statem do
   # callbacks
   #---------------------------------------------------------------------------------------------------------------------
 
-  def init(%{min_incr: _, review_time: _, dt_pct: _, ut_pct: _, stable_pct: _} = init_map) do
+  def init(%{min_incr: _, dt_pct: _, ut_pct: _, stable_pct: _} = init_map) do
     %{name: name, med_mod: med_mod, pair: pair, ref_pair: ref_pair, ws: ws} = init_map
     ws_mod = Module.concat([name,WsClient])
     ws && DynamicSupervisor.start_child(CfBot.WsSup, {ws_mod, [med_mod]})

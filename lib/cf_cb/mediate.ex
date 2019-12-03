@@ -42,6 +42,7 @@ defmodule CfCb.Mediate do
   def stop_order(order_id, price) do
     Logger.info("Cancel limit order #{order_id} at #{price}")
     JsonUtils.retry_req(&CfCb.Api.cancel_order/1, [order_id])
+    Process.sleep(50)
   end
 
   def list_open_orders(product_id) do
