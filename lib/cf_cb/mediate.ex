@@ -82,7 +82,7 @@ defmodule CfCb.Mediate do
     [ask, bid] =
       Enum.filter(
         fills,
-        fn (%{"created_at" => dt_str} = fill) ->
+        fn (%{"created_at" => dt_str}) ->
           {:ok, dt, 0} = DateTime.from_iso8601(dt_str)
           ts = DateTime.to_unix(dt)
           ts > since
