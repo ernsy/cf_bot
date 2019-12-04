@@ -160,12 +160,7 @@ defmodule CfBot.Statem do
       :ok = :dets.insert(:disk_storage, {:data, new_data})
       {:keep_state, new_data, [{:state_timeout, review_time, {action, []}} | post_actions]}
     else
-      next_state =
-        if mode == "hodl" or mode == "buy" do
-          :wait_stable
-        else
-          state
-        end
+      next_state = if mode == "buy", do: :wait_stable, else: state
       Logger.warn("Volume below minimum, next state: #{next_state}")
       {:next_state, next_state, %{data | vol_key => 0, :order_price => 0}, []}
     end
