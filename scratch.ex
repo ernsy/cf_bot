@@ -22,7 +22,7 @@ CfValr.Mediate.get_avail_bal("BTC")
 CfValr.Api.balances()
 CfBot.Statem.resume(CfLuno)
 
-CfBot.CC.start_cb_test(0, "buy")
+CfBot.CC.start_cb_test(6200, "buy")
 
 CfBot.CC.stop_dyn_sup_child()
 

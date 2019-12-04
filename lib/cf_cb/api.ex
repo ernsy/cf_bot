@@ -71,7 +71,14 @@ defmodule CfCb.Api do
 
   defp invoke_private_api(path, method, body \\ "") do
     url = @cb_uri <> path
-    headers = get_auth_headers(method, path, body)
+    {key, sign, ts, passphrase} = get_auth_params(method, path, body)
+    headers = [
+      {"Content-Type", "application/json"},
+      {"CB-ACCESS-KEY", key},
+      {"CB-ACCESS-SIGN", sign},
+      {"CB-ACCESS-TIMESTAMP", ts},
+      {"CB-ACCESS-PASSPHRASE", passphrase}
+    ]
     Logger.debug("CB private api v1 url: #{inspect url}")
     case method do
       "GET" -> HTTPoison.get(url, headers, [])
@@ -80,7 +87,7 @@ defmodule CfCb.Api do
     end
   end
 
-  defp get_auth_headers(method, url_path, body) do
+  def get_auth_params(method, url_path, body) do
     key = System.get_env("cb_api_key")
     {:ok, secret} = System.get_env("cb_api_secret")
                     |> Base.decode64
@@ -89,12 +96,6 @@ defmodule CfCb.Api do
     msg = "#{ts}#{method}#{url_path}#{body}"
     sign = :crypto.hmac(:sha256, secret, msg)
            |> Base.encode64(case: :lower)
-    [
-      {"Content-Type", "application/json"},
-      {"CB-ACCESS-KEY", key},
-      {"CB-ACCESS-SIGN", sign},
-      {"CB-ACCESS-TIMESTAMP", ts},
-      {"CB-ACCESS-PASSPHRASE", passphrase}
-    ]
+    {key, sign, ts, passphrase}
   end
 end

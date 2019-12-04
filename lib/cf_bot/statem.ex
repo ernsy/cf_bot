@@ -56,8 +56,8 @@ defmodule CfBot.Statem do
 
   def init(%{min_incr: _, dt_pct: _, ut_pct: _, stable_pct: _} = init_map) do
     %{name: name, med_mod: med_mod, pair: pair, ref_pair: ref_pair, ws: ws} = init_map
-    ws_mod = Module.concat([name, WsClient])
-    ws && DynamicSupervisor.start_child(CfBot.WsSup, {ws_mod, [med_mod]})
+    ws_mod = Module.concat([name, WsUserClient])
+    ws && DynamicSupervisor.start_child(CfBot.WsSup, {ws_mod, [med_mod, pair]})
     prim_curr = String.slice(pair, 0, 3)
     sec_curr = String.slice(pair, -3, 3)
     {:ok, :disk_storage} = :dets.open_file(:disk_storage, [type: :set])
@@ -191,7 +191,7 @@ defmodule CfBot.Statem do
     :keep_state_and_data
   end
 
-  def handle_event(:cast, {:ws_update, %{"msg_type" => "NEW_ACCOUNT_TRADE"} = msg}, _state, data) do
+  def handle_event(:cast, {:ws_update, %{"msg_type" => "new_trade"} = msg}, _state, data) do
     %{"volume" => vol, "side" => side} = msg
     new_data =
       if side == "buy" do

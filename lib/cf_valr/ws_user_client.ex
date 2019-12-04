@@ -1,11 +1,11 @@
-defmodule CfValr.WsClient do
+defmodule CfValr.WsUserClient do
   use WebSockex
 
   @url "wss://api.valr.com/ws/account"
 
-  def start_link([cb_fun]) do
+  def start_link([cb_fun, pair]) do
     auth_headers = CfValr.Api.get_auth_headers("GET", "/ws/account", "")
-    {:ok, pid} = WebSockex.start_link(@url, __MODULE__, %{cb_fun: cb_fun}, [extra_headers: auth_headers])
+    {:ok, pid} = WebSockex.start_link(@url, __MODULE__, %{cb_fun: cb_fun, pair: pair}, [extra_headers: auth_headers])
     {:ok, pid}
   end
 

@@ -51,7 +51,7 @@ defmodule CfValr.Mediate do
       Enum.filter(orders, &(&1["currencyPair"] == pair))
       |> Enum.map(
            fn (%{"orderId" => id, "price" => price, "createdAt" => datetime_str}) ->
-             ts = convert_date_time(datetime_str)
+             ts = JsonUtils.convert_date_time(datetime_str)
              {pricef, _} = Float.parse(price)
              %{order_id: id, order_price: pricef, order_time: ts}
            end
@@ -64,11 +64,11 @@ defmodule CfValr.Mediate do
     get_traded_volume(trades, since)
   end
 
-  def handle_ws_msg(%{"type" => "NEW_ACCOUNT_TRADE", "currencyPairSymbol" => "BTCZAR", "data" => data} = msg, state) do
+  def handle_ws_msg(%{"type" => "NEW_ACCOUNT_TRADE", "data" => data} = msg, state) do
     Logger.warn("New Valr trade #{inspect msg}")
     %{"quantity" => vol, "tradedAt" => date_time_str, "side" => side} = data
-    ts = convert_date_time(date_time_str)
-    med_data = %{"msg_type" => "NEW_ACCOUNT_TRADE", "volume" => vol, "timestamp" => ts, "side" => side}
+    ts = JsonUtils.convert_date_time(date_time_str)
+    med_data = %{"msg_type" => "new_trade", "volume" => vol, "timestamp" => ts, "side" => side}
     CfBot.Statem.ws_update(CfValr, med_data)
     {:ok, state}
   end
@@ -98,7 +98,7 @@ defmodule CfValr.Mediate do
       Enum.filter(
         trades,
         fn (%{"tradedAt" => dt_str}) ->
-          ts = convert_date_time(dt_str)
+          ts = JsonUtils.convert_date_time(dt_str)
           ts > since
         end
       )
@@ -113,15 +113,10 @@ defmodule CfValr.Mediate do
                [vol_ask, vol_bid + trade_vol]
            end
          )
-    latest_ts = convert_date_time(latest_ts_str)
+    latest_ts = JsonUtils.convert_date_time(latest_ts_str)
     vol = %{"ASK" => ask, "BID" => bid, "latest_ts" => latest_ts}
     Logger.info("Traded vol: #{inspect vol}")
     vol
-  end
-
-  defp convert_date_time(dt_str) do
-    {:ok, dt, 0} = DateTime.from_iso8601(dt_str)
-    DateTime.to_unix(dt)
   end
 
 end

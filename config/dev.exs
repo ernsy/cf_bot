@@ -25,6 +25,8 @@ config :logger,
        backends: [:console]
 config :logger,
        :console,
-       level: :debug,
+       level: :info,
        metadata: [:module, :line, :function]
-config :cf_bot, :cb_uri, "https://api-public.sandbox.pro.coinbase.com"
+config :cf_bot,
+       cb_uri: "https://api-public.sandbox.pro.coinbase.com",
+       cb_ws_uri: "wss://ws-feed-public.sandbox.pro.coinbase.com"

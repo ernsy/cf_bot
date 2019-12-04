@@ -42,4 +42,10 @@ defmodule JsonUtils do
     error
   end
 
+
+  def convert_date_time(dt_str) do
+    {:ok, dt, 0} = DateTime.from_iso8601(dt_str)
+    DateTime.to_unix(dt)
+  end
+
 end

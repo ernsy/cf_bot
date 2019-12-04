@@ -50,8 +50,7 @@ defmodule CfCb.Mediate do
     orders && Enum.map(
       orders,
       fn (%{"id" => id, "price" => price, "created_at" => datetime_str}) ->
-        {:ok, datetime, _} = DateTime.from_iso8601(datetime_str)
-        ts = DateTime.to_unix(datetime)
+        ts = JsonUtils.convert_date_time(datetime_str)
         {pricef, _} = Float.parse(price)
         %{order_id: id, order_price: pricef, order_time: ts}
       end
@@ -63,6 +62,32 @@ defmodule CfCb.Mediate do
   def sum_trades(_product_id, since, order_id, false) do
     {:ok, fills} = JsonUtils.retry_req(&CfCb.Api.get_fills/1, [[order_id: order_id]])
     get_traded_volume(fills, since)
+  end
+
+  def handle_ws_msg(%{"type" => "match", "time" => date_time_str, "size" => vol, "side" => side} = msg, state) do
+    Logger.warn("New CB trade #{inspect msg}")
+    ts = JsonUtils.convert_date_time(date_time_str)
+    med_data = %{"msg_type" => "new_trade", "volume" => vol, "timestamp" => ts, "side" => side}
+    CfBot.Statem.ws_update(CfCb, med_data)
+    {:ok, state}
+  end
+
+  #  {
+  #"type": "match",
+  #"trade_id": 10,
+  #"sequence": 50,
+  #         "maker_order_id": "ac928c66-ca53-498f-9c13-a110027a60e8",
+  #                            "taker_order_id": "132fb6ae-456b-4654-b4e0-d681ac05cea1",
+  #                                                                                   "time": "2014-11-07T08:19:27.028459Z",
+  #"product_id": "BTC-USD",
+  #"size": "5.23512",
+  #"price": "400.23",
+  #"side": "sell"
+  # }
+
+  def handle_ws_msg(msg, state) do
+    Logger.warn("Unhandled CB WS msg #{inspect msg}")
+    {:ok, state}
   end
 
   #---------------------------------------------------------------------------------------------------------------------
@@ -85,8 +110,7 @@ defmodule CfCb.Mediate do
       Enum.filter(
         fills,
         fn (%{"created_at" => dt_str}) ->
-          {:ok, dt, 0} = DateTime.from_iso8601(dt_str)
-          ts = DateTime.to_unix(dt)
+          ts = JsonUtils.convert_date_time(dt_str)
           ts > since
         end
       )
@@ -103,8 +127,7 @@ defmodule CfCb.Mediate do
                [vol_ask, vol_bid]
            end
          )
-    {:ok, latest_dt, 0} = DateTime.from_iso8601(latest_ts_str)
-    latest_ts = DateTime.to_unix(latest_dt)
+    latest_ts = JsonUtils.convert_date_time(latest_ts_str)
     vol = %{"ASK" => ask, "BID" => bid, "latest_ts" => latest_ts}
     Logger.info("Traded vol: #{inspect vol}")
     vol
