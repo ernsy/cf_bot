@@ -47,7 +47,7 @@ defmodule CfBot.Statem do
   end
 
   def ws_update(name, msg) do
-    GenStateMachine.cast(name, {:ws_msg, msg})
+    GenStateMachine.cast(name, {:ws_update, msg})
   end
 
   #---------------------------------------------------------------------------------------------------------------------
