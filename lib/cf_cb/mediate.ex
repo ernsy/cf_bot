@@ -64,9 +64,10 @@ defmodule CfCb.Mediate do
     get_traded_volume(fills, since)
   end
 
-  def handle_ws_msg(%{"type" => "match", "time" => date_time_str, "size" => vol, "side" => side} = msg, state) do
+  def handle_ws_msg(%{"type" => "match", "time" => date_time_str, "size" => vol_str, "side" => side} = msg, state) do
     Logger.warn("New CB trade #{inspect msg}")
     ts = JsonUtils.convert_date_time(date_time_str)
+    {vol, _rem_bin} = Float.parse(vol_str)
     med_data = %{"msg_type" => "new_trade", "volume" => vol, "timestamp" => ts, "side" => side}
     CfBot.Statem.ws_update(CfCb, med_data)
     {:ok, state}

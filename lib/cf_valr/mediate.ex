@@ -66,8 +66,9 @@ defmodule CfValr.Mediate do
 
   def handle_ws_msg(%{"type" => "NEW_ACCOUNT_TRADE", "data" => data} = msg, state) do
     Logger.warn("New Valr trade #{inspect msg}")
-    %{"quantity" => vol, "tradedAt" => date_time_str, "side" => side} = data
+    %{"quantity" => vol_str, "tradedAt" => date_time_str, "side" => side} = data
     ts = JsonUtils.convert_date_time(date_time_str)
+    {vol, _rem_bin} = Float.parse(vol_str)
     med_data = %{"msg_type" => "new_trade", "volume" => vol, "timestamp" => ts, "side" => side}
     CfBot.Statem.ws_update(CfValr, med_data)
     {:ok, state}
