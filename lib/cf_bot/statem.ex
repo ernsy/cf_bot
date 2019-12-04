@@ -56,7 +56,7 @@ defmodule CfBot.Statem do
 
   def init(%{min_incr: _, dt_pct: _, ut_pct: _, stable_pct: _} = init_map) do
     %{name: name, med_mod: med_mod, pair: pair, ref_pair: ref_pair, ws: ws} = init_map
-    ws_mod = Module.concat([name,WsClient])
+    ws_mod = Module.concat([name, WsClient])
     ws && DynamicSupervisor.start_child(CfBot.WsSup, {ws_mod, [med_mod]})
     prim_curr = String.slice(pair, 0, 3)
     sec_curr = String.slice(pair, -3, 3)
@@ -120,37 +120,17 @@ defmodule CfBot.Statem do
   end
 
   def handle_event(:cast, {:oracle_update, %{"price" => price, "time" => time}}, state, data) do
-    %{
-      oracle_queue: {queue, length},
-      sell_amt: sell_amt,
-      buy_amt: buy_amt,
-      oracle_ref: {old_price, old_datetime},
-      dt_pct: dt_pct,
-      ut_pct: ut_pct,
-      stable_pct: s_pct,
-      mode: mode
-    } = data
+    %{oracle_ref: {_old_price, old_datetime}, oracle_queue: {queue, length}} = data
     {pricef, _rem_bin} = Float.parse(price)
     {:ok, datetime, _} = DateTime.from_iso8601(time)
     seconds_diff = DateTime.diff(datetime, old_datetime)
     if seconds_diff > @trade_delta_sec do
       {{:value, {q_price, q_datetime}}, queue} = :queue.out(queue)
       queue = :queue.in({pricef, datetime}, queue)
-      transitions = apply(CfBot.Transitions, state, [])
-      {next_state, next_action} =
-        cond do
-          sell_amt > 0 and buy_amt > 0 ->
-            check_delta(old_price, pricef, dt_pct, ut_pct, s_pct, transitions[:buy_or_sell])
-          sell_amt > 0 or mode == "hodl" ->
-            check_delta(old_price, pricef, dt_pct, ut_pct, s_pct, transitions[:sell])
-          buy_amt > 0 or mode == "buy" ->
-            check_delta(old_price, pricef, dt_pct, ut_pct, s_pct, transitions[:buy])
-          true ->
-            {state, []}
-        end
+      {next_state, next_action} = get_next_state_and_action(pricef, state, data)
       new_data = %{data | oracle_queue: {queue, length}, oracle_ref: {q_price, q_datetime}}
       Logger.debug("Time between trades: #{seconds_diff}")
-      do_state_change(state, next_state, next_action, pricef, new_data)
+      do_state_change(pricef, state, next_state, next_action, new_data)
     else
       new_queue = :queue.in({pricef, datetime}, queue)
       new_data = %{data | oracle_queue: {new_queue, length + 1}}
@@ -175,15 +155,8 @@ defmodule CfBot.Statem do
       {:ok, new_price} = calc_limit_order_price(vol_before_order, order_vol, type, data)
       {:ok, [timestamp, rem_vol, alt_vol, new_order_id, review_time]} =
         place_limit_order(new_price, order_vol, alt_vol, hodl_amt, type, data)
-      new_data =
-        %{
-          data |
-          :order_time => timestamp,
-          vol_key => rem_vol,
-          alt_vol_key => alt_vol,
-          :order_id => new_order_id,
-          :order_price => new_price
-        }
+      new_data = %{data | vol_key => rem_vol, alt_vol_key => alt_vol}
+      new_data = %{new_data | :order_time => timestamp, :order_id => new_order_id, :order_price => new_price}
       :ok = :dets.insert(:disk_storage, {:data, new_data})
       {:keep_state, new_data, [{:state_timeout, review_time, {action, []}} | post_actions]}
     else
@@ -199,7 +172,7 @@ defmodule CfBot.Statem do
   end
 
   def handle_event(:internal, :cancel_orders, _state, data) do
-    %{order_time: order_ts,  order_id: order_id} = data
+    %{order_time: order_ts, order_id: order_id} = data
     %{sell_amt: sell_amt, buy_amt: buy_amt, med_mod: mod, pair: pair, ws: ws} = data
     orders = mod.list_open_orders(pair)
     %{} = cancel_orders(orders, mod)
@@ -251,21 +224,36 @@ defmodule CfBot.Statem do
     {:ok, [float_price, datetime]}
   end
 
-  defp check_delta(old_price, curr_price, dt_pct, ut_pct, stable_pct, transitions) do
-    delta_pct = (curr_price - old_price) / old_price
-    case delta_pct do
-      change_pct when abs(change_pct) < stable_pct -> transitions.stable
-      change_pct when change_pct > ut_pct -> transitions.up_trend
-      change_pct when change_pct < -dt_pct -> transitions.down_trend
-      change_pct when change_pct > 0 -> transitions.positive
-      change_pct when change_pct < 0 -> transitions.negative
+  defp get_next_state_and_action(pricef, state, %{oracle_ref: {old_price, _old_datetime}} = data) do
+    %{sell_amt: sell_amt, buy_amt: buy_amt, dt_pct: dt_pct, ut_pct: ut_pct, stable_pct: s_pct, mode: mode} = data
+    transitions = apply(CfBot.Transitions, state, [])
+    cond do
+      sell_amt > 0 and buy_amt > 0 ->
+        check_delta(old_price, pricef, dt_pct, ut_pct, s_pct, transitions[:buy_or_sell])
+      sell_amt > 0 or mode == "hodl" ->
+        check_delta(old_price, pricef, dt_pct, ut_pct, s_pct, transitions[:sell])
+      buy_amt > 0 or mode == "buy" ->
+        check_delta(old_price, pricef, dt_pct, ut_pct, s_pct, transitions[:buy])
+      true ->
+        {state, []}
     end
   end
 
-  defp do_state_change(state, state, _next_action, _pricef, data) do
+  defp check_delta(old_price, curr_price, dt_pct, ut_pct, stable_pct, transitions) do
+    delta_pct = (curr_price - old_price) / old_price
+    cond do
+      abs(delta_pct) < stable_pct -> transitions.stable
+      delta_pct > ut_pct -> transitions.up_trend
+      delta_pct < -dt_pct -> transitions.down_trend
+      delta_pct > 0 -> transitions.positive
+      delta_pct < 0 -> transitions.negative
+    end
+  end
+
+  defp do_state_change(_pricef, state, state, _next_action, data) do
     {:next_state, state, data}
   end
-  defp do_state_change(_state, next_state, next_action, pricef, %{oracle_ref: {old_price, _old_datetime}, } = data) do
+  defp do_state_change(pricef, _state, next_state, next_action, %{oracle_ref: {old_price, _old_datetime}, } = data) do
     Logger.warn("State change:#{next_state}")
     Logger.info("old oracle price: #{old_price}, new oracle price:#{pricef}")
     new_sell_amt = get_mode_sell_amt(data)
@@ -357,7 +345,7 @@ defmodule CfBot.Statem do
 
   defp place_limit_order(new_price, new_vol, alt_vol, _hodl_amt, type, %{order_price: old_price} = data)
        when old_price == new_price do
-    %{order_time: old_ts, order_id: order_id} =data
+    %{order_time: old_ts, order_id: order_id} = data
     %{mode: mode, med_mod: med_mod, pair: pair, ws: ws, short_review_time: r_time} = data
     sum_trades = med_mod.sum_trades(pair, old_ts, order_id, ws)
     ts = sum_trades["latest_ts"] || :erlang.system_time(:millisecond)
