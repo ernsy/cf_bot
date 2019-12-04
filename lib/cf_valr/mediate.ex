@@ -64,18 +64,17 @@ defmodule CfValr.Mediate do
     get_traded_volume(trades, since)
   end
 
-  def handle_ws_msg(%{"type" => "NEW_TRADE", "currencyPairSymbol" => "BTCZAR", "data" => data} = msg, state) do
+  def handle_ws_msg(%{"type" => "NEW_ACCOUNT_TRADE", "currencyPairSymbol" => "BTCZAR", "data" => data} = msg, state) do
     Logger.warn("New Valr trade #{inspect msg}")
-    %{"quantity" => vol, "tradedAt" => date_time_str, "takerSide" => taker_side} = data
+    %{"quantity" => vol, "tradedAt" => date_time_str, "side" => side} = data
     ts = convert_date_time(date_time_str)
-    side = if taker_side == "buy", do: "sell", else: "buy"
-    med_data = %{"msg_type" => "NEW_TRADE", "volume" => vol, "timestamp" => ts, "side" => side}
+    med_data = %{"msg_type" => "NEW_ACCOUNT_TRADE", "volume" => vol, "timestamp" => ts, "side" => side}
     CfBot.Statem.ws_update(CfValr, med_data)
     {:ok, state}
   end
 
   def handle_ws_msg(msg, state) do
-    Logger.warn("Unhandled Valr WS msg #{inspect msg}")
+    Logger.debug("Unhandled Valr WS msg #{inspect msg}")
     {:ok, state}
   end
 

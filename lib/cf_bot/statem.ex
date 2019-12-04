@@ -218,7 +218,7 @@ defmodule CfBot.Statem do
     :keep_state_and_data
   end
 
-  def handle_event(:cast, {:ws_update, %{"msg_type" => "NEW_TRADE"} = msg}, _state, data) do
+  def handle_event(:cast, {:ws_update, %{"msg_type" => "NEW_ACCOUNT_TRADE"} = msg}, _state, data) do
     %{"volume" => vol, "side" => side} = msg
     new_data =
       if side == "buy" do
@@ -365,7 +365,7 @@ defmodule CfBot.Statem do
     [rem_vol, alt_vol] = get_return_values(traded_vol, new_vol, alt_vol, mode)
     rem_vol_str = :erlang.float_to_binary(rem_vol, [{:decimals, 6}])
     Logger.info("Keep limit order #{order_id} remaining volume #{rem_vol_str} at #{old_price}")
-    {:ok, [ts, rem_vol, alt_vol, order_id, 0]}
+    {:ok, [ts, rem_vol, alt_vol, order_id, r_time]}
   end
   defp place_limit_order(new_price, new_vol, alt_vol, hodl_amt, type, data) do
     %{order_time: old_ts, order_price: old_price, order_id: order_id} = data
@@ -389,7 +389,7 @@ defmodule CfBot.Statem do
       new_order_id = med_mod.post_order(pair, type, adj_rem_vol, new_price, "true")
       {:ok, [ts, adj_rem_vol, alt_vol, new_order_id, r_time]}
     else
-      {:ok, [ts, 0, alt_vol, order_id, r_time]}
+      {:ok, [ts, 0, alt_vol, order_id, 0]}
     end
   end
 
