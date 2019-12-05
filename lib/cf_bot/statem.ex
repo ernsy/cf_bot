@@ -82,7 +82,7 @@ defmodule CfBot.Statem do
     maker_fee = med_mod.get_maker_fee()
     sell_amt = data[:sell_amt]
     hodl_amt = init_map[:prim_hodl_amt]
-    {new_sell_amt, new_buy_amt} = if init_map[:mode] == "hodl" and hodl_amt,
+    {new_sell_amt, new_buy_amt} = if init_map[:mode] == "sell" and hodl_amt,
                                      do: {max(med_mod.get_avail_bal(prim_curr) - hodl_amt, 0), 0}, else: {sell_amt, 0}
     init_data = %{
       oracle_queue: {queue, 0},
@@ -226,7 +226,7 @@ defmodule CfBot.Statem do
     cond do
       sell_amt > 0 and buy_amt > 0 ->
         check_delta(old_price, pricef, dt_pct, ut_pct, s_pct, transitions[:buy_or_sell])
-      sell_amt > 0 or mode == "hodl" ->
+      sell_amt > 0 ->
         check_delta(old_price, pricef, dt_pct, ut_pct, s_pct, transitions[:sell])
       buy_amt > 0 or mode == "buy" ->
         check_delta(old_price, pricef, dt_pct, ut_pct, s_pct, transitions[:buy])
@@ -252,16 +252,12 @@ defmodule CfBot.Statem do
   defp do_state_change(pricef, _state, next_state, next_action, %{oracle_ref: {old_price, _old_datetime}, } = data) do
     Logger.warn("State change:#{next_state}")
     Logger.info("old oracle price: #{old_price}, new oracle price:#{pricef}")
-    new_sell_amt = get_mode_sell_amt(data)
     new_buy_amt = get_mode_buy_amt(data)
-    {:next_state, next_state, %{data | sell_amt: new_sell_amt, buy_amt: new_buy_amt}, next_action}
+    {:next_state, next_state, %{data | buy_amt: new_buy_amt}, next_action}
   end
 
-  defp get_mode_sell_amt(%{sell_amt: sell_amt}), do: sell_amt
-
   defp get_mode_buy_amt(
-         %{
-           buy_amt: buy_amt,
+         %{buy_amt: buy_amt,
            pair: pair,
            sec_hodl_amt: hodl_amt,
            med_mod: med_mod,
@@ -369,7 +365,7 @@ defmodule CfBot.Statem do
         adj_rem_vol = min(rem_vol, (bal - hodl_amt) / ((new_price + min_incr) * (1 + fee)) - 0.000001)
         [bal, adj_rem_vol]
       end
-    if bal - adj_rem_vol > hodl_amt and adj_rem_vol >= @min_order_vol do
+    if bal - adj_rem_vol >= hodl_amt and adj_rem_vol >= @min_order_vol do
       new_order_id = med_mod.post_order(pair, type, adj_rem_vol, new_price, "true")
       {:ok, [ts, adj_rem_vol, alt_vol, new_order_id, r_time]}
     else
