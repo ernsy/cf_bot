@@ -249,7 +249,8 @@ defmodule CfBot.Statem do
   defp do_state_change(_pricef, state, state, _next_action, data) do
     {:next_state, state, data}
   end
-  defp do_state_change(pricef, _state, next_state, next_action, %{oracle_ref: {old_price, _old_datetime}, } = data) do
+  defp do_state_change(pricef, _state, next_state, next_action, data) do
+    %{oracle_ref: {old_price, _old_datetime}, long_review_time: review_time} = data
     Logger.warn("State change:#{next_state}")
     Logger.info("old oracle price: #{old_price}, new oracle price:#{pricef}")
     new_buy_amt = get_mode_buy_amt(data)
