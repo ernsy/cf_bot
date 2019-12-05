@@ -189,7 +189,7 @@ defmodule CfBot.Statem do
   def handle_event(:cast, {:ws_update, %{"msg_type" => "new_trade"} = msg}, _state, data) do
     %{"volume" => vol, "side" => side} = msg
     new_data =
-      if side == "buy" do
+      if side == "sell" do
         %{sell_amt: sell_amt} = data
         %{data | sell_amt: sell_amt - vol}
       else

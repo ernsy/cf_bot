@@ -39,16 +39,15 @@ defmodule CfBot.CC do
           min_incr: 1,
           long_review_time: 3000,
           short_review_time: 1000,
-          dt_pct: 0.0015,
-          ut_pct: 0.0015,
-          stable_pct: 0.00025,
+          dt_pct: 0.002,
+          ut_pct: 0.002,
+          stable_pct: 0.0005,
           prim_hodl_amt: hodl_amt,
           mode: mode,
           ws: false
         }
       }
     )
-    CfBot.Statem.set_buy_amt(CfLuno, 0.0)
   end
 
   def start_valr(hodl_amt, mode) do
@@ -62,7 +61,7 @@ defmodule CfBot.CC do
           pair: "BTCZAR",
           ref_pair: "BTC-USD",
           min_incr: 1,
-          long_review_time: 5500,
+          long_review_time: 6000,
           short_review_time: 3000,
           dt_pct: 0.001,
           ut_pct: 0.001,
@@ -73,8 +72,6 @@ defmodule CfBot.CC do
         }
       }
     )
-    CfBot.Statem.set_mode(CfValr, "sell")
-    CfBot.Statem.set_buy_amt(CfValr, 0.0)
   end
 
   def start_cb_test(hodl_amt, mode) do
