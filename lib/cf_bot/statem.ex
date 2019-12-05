@@ -253,7 +253,7 @@ defmodule CfBot.Statem do
     Logger.warn("State change:#{next_state}")
     Logger.info("old oracle price: #{old_price}, new oracle price:#{pricef}")
     new_buy_amt = get_mode_buy_amt(data)
-    {:next_state, next_state, %{data | buy_amt: new_buy_amt}, next_action}
+    {:next_state, next_state, %{data | buy_amt: new_buy_amt}, {:state_timeout, review_time, {next_action, []}}}
   end
 
   defp get_mode_buy_amt(

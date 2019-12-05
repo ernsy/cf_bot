@@ -62,7 +62,7 @@ defmodule CfBot.CC do
           ref_pair: "BTC-USD",
           min_incr: 1,
           long_review_time: 7000,
-          short_review_time: 3000,
+          short_review_time: 4000,
           dt_pct: 0.001,
           ut_pct: 0.001,
           stable_pct: 0.00025,

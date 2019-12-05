@@ -5,13 +5,13 @@ DynamicSupervisor.start_child(CfBot.DynSup,{CfBot.Statem, %{name: CfCb, med_mod:
 CfBot.CC.start_cb(0, "buy")
 CfBot.Statem.set_hodl_amt(CfCb, "secondary", 0)
 
-CfBot.CC.start_luno(0.24669901, "sell")
+CfBot.CC.start_luno(0.24515065, "sell")
 CfBot.Statem.set_sell_amt(CfLuno, 0.09837618)
 CfBot.Statem.set_buy_amt(CfLuno, 0.0)
 CfBot.Statem.set_hodl_amt(CfLuno, "primary", 0.4687)
 CfBot.Statem.set_mode(CfLuno, "sell")
 
-CfBot.CC.start_valr(0.24669901, "sell")
+CfBot.CC.start_valr(0.24515065, "sell")
 CfBot.Statem.set_sell_amt(CfValr, 0.36119262/2)
 CfBot.Statem.set_hodl_amt(CfValr, "primary", 0.0)
 CfBot.Statem.set_sell_amt(CfValr, 0.07949730796)
