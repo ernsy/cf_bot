@@ -60,7 +60,7 @@ defmodule CfBot.Statem do
     ws && DynamicSupervisor.start_child(CfBot.WsSup, {ws_mod, [med_mod, pair]})
     prim_curr = String.slice(pair, 0, 3)
     sec_curr = String.slice(pair, -3, 3)
-    {:ok, :disk_storage} = :dets.open_file(name, [type: :set])
+    {:ok, name} = :dets.open_file(name, [type: :set])
     data = case :dets.lookup(name, :data) do
       [data: %{sell_amt: _, prim_hodl_amt: _, buy_amt: _, sec_hodl_amt: _, mode: _} = data] ->
         data
@@ -205,7 +205,7 @@ defmodule CfBot.Statem do
     :keep_state_and_data
   end
 
-  def terminate(_reason, _state, %{name: name} = data) do
+  def terminate(_reason, _state, %{name: name}) do
     :dets.close(name)
   end
 
