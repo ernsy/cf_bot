@@ -46,7 +46,7 @@ defmodule CfBot.Transitions do
       sell:
       %{
         stable: {:sell, @limit_sell_action},
-        up_trend: {:wait_stable, [@cancel_order_action]},
+        up_trend: {:wait_stable, @cancel_order_action},
         down_trend: {:quick_sell, @limit_sell_action},
         positive: {:sell, @limit_sell_action},
         negative: {:sell, @limit_sell_action}
