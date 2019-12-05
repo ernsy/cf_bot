@@ -60,8 +60,8 @@ defmodule CfBot.Statem do
     ws && DynamicSupervisor.start_child(CfBot.WsSup, {ws_mod, [med_mod, pair]})
     prim_curr = String.slice(pair, 0, 3)
     sec_curr = String.slice(pair, -3, 3)
-    {:ok, :disk_storage} = :dets.open_file(:disk_storage, [type: :set])
-    data = case :dets.lookup(:disk_storage, :data) do
+    {:ok, :disk_storage} = :dets.open_file(name, [type: :set])
+    data = case :dets.lookup(name, :data) do
       [data: %{sell_amt: _, prim_hodl_amt: _, buy_amt: _, sec_hodl_amt: _, mode: _} = data] ->
         data
       _ ->
@@ -112,10 +112,10 @@ defmodule CfBot.Statem do
     {:keep_state, %{data | pause: false}, [{:state_timeout, 0, action}]}
   end
 
-  def handle_event(:cast, {:set_data, key, val}, state, data) do
+  def handle_event(:cast, {:set_data, key, val}, state, %{name: name} = data) do
     Logger.info("Set #{key} to:#{val}, state:#{state}")
     new_data = %{data | key => val}
-    :ok = :dets.insert(:disk_storage, {:data, new_data})
+    :ok = :dets.insert(name, {:data, new_data})
     Logger.info("New data #{inspect new_data}")
     {:keep_state, new_data}
   end
@@ -139,7 +139,7 @@ defmodule CfBot.Statem do
     end
   end
 
-  def handle_event(event_type, {action, post_actions}, state, %{mode: mode} = data)
+  def handle_event(event_type, {action, post_actions}, state, %{mode: mode, name: name} = data)
       when
         (event_type == :internal or event_type == :state_timeout) and (action == :limit_sell or action == :limit_buy) do
     [vol_key, alt_vol_key, hodl_amt_key, type] =
@@ -158,7 +158,7 @@ defmodule CfBot.Statem do
         place_limit_order(new_price, order_vol, alt_vol, hodl_amt, type, data)
       new_data = %{data | vol_key => rem_vol, alt_vol_key => alt_vol}
       new_data = %{new_data | :order_time => timestamp, :order_id => new_order_id, :order_price => new_price}
-      :ok = :dets.insert(:disk_storage, {:data, new_data})
+      :ok = :dets.insert(name, {:data, new_data})
       {:keep_state, new_data, [{:state_timeout, review_time, {action, []}} | post_actions]}
     else
       next_state = if mode == "buy", do: :wait_stable, else: state
@@ -205,8 +205,8 @@ defmodule CfBot.Statem do
     :keep_state_and_data
   end
 
-  def terminate(_reason, _state, _data) do
-    :dets.close(:disk_storage)
+  def terminate(_reason, _state, %{name: name} = data) do
+    :dets.close(name)
   end
 
   #---------------------------------------------------------------------------------------------------------------------
