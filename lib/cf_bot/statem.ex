@@ -82,8 +82,8 @@ defmodule CfBot.Statem do
     maker_fee = med_mod.get_maker_fee()
     sell_amt = data[:sell_amt]
     hodl_amt = init_map[:prim_hodl_amt]
-    new_sell_amt = if init_map[:mode] == "hodl" and hodl_amt,
-                      do: max(med_mod.get_avail_bal(prim_curr) - hodl_amt, 0), else: sell_amt
+    {new_sell_amt, new_buy_amt} = if init_map[:mode] == "hodl" and hodl_amt,
+                                     do: {max(med_mod.get_avail_bal(prim_curr) - hodl_amt, 0), 0}, else: {sell_amt, 0}
     init_data = %{
       oracle_queue: {queue, 0},
       oracle_ref: {oracle_price, datetime},
@@ -92,7 +92,8 @@ defmodule CfBot.Statem do
       order_price: 0,
       order_time: :erlang.system_time(:millisecond),
       fee: maker_fee,
-      sell_amt: new_sell_amt
+      sell_amt: new_sell_amt,
+      buy_amt: new_buy_amt
     }
     new_data = Map.merge(data, init_data)
                |> Map.merge(init_map)
