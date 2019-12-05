@@ -254,11 +254,15 @@ defmodule CfBot.Statem do
     Logger.warn("State change:#{next_state}")
     Logger.info("old oracle price: #{old_price}, new oracle price:#{pricef}")
     new_buy_amt = get_mode_buy_amt(data)
-    {:next_state, next_state, %{data | buy_amt: new_buy_amt}, {:state_timeout, review_time, {next_action, []}}}
+    next_action = if next_action == :cancel_orders,
+                     do: {:next_event, :internal, :cancel_orders},
+                     else: {:state_timeout, review_time, next_action}
+    {:next_state, next_state, %{data | buy_amt: new_buy_amt}, next_action}
   end
 
   defp get_mode_buy_amt(
-         %{buy_amt: buy_amt,
+         %{
+           buy_amt: buy_amt,
            pair: pair,
            sec_hodl_amt: hodl_amt,
            med_mod: med_mod,

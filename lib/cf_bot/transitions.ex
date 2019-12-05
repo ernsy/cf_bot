@@ -1,8 +1,8 @@
 defmodule CfBot.Transitions do
   
-  @limit_sell_action {:next_event, :internal, {:limit_sell, []}}
-  @limit_buy_action {:next_event, :internal, {:limit_buy, []}}
-  @cancel_order_action {:next_event, :internal, :cancel_orders}
+  @limit_sell_action {:limit_sell, []}
+  @limit_buy_action {:limit_buy, []}
+  @cancel_order_action :cancel_orders
 
   def wait_stable() do
     %{
