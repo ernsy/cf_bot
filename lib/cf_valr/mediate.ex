@@ -59,7 +59,7 @@ defmodule CfValr.Mediate do
   end
 
   def sum_trades(_product_id, _since, _, true), do: %{"ASK" => 0, "BID" => 0}
-  def sum_trades(pair, since, _order_id) do
+  def sum_trades(pair, since, _order_id, _) do
     {:ok, trades} = JsonUtils.retry_req(&CfValr.Api.get_trade_history/2, [pair, "10"])
     get_traded_volume(trades, since)
   end
