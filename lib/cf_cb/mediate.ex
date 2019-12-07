@@ -73,19 +73,6 @@ defmodule CfCb.Mediate do
     {:ok, state}
   end
 
-  #  {
-  #"type": "match",
-  #"trade_id": 10,
-  #"sequence": 50,
-  #         "maker_order_id": "ac928c66-ca53-498f-9c13-a110027a60e8",
-  #                            "taker_order_id": "132fb6ae-456b-4654-b4e0-d681ac05cea1",
-  #                                                                                   "time": "2014-11-07T08:19:27.028459Z",
-  #"product_id": "BTC-USD",
-  #"size": "5.23512",
-  #"price": "400.23",
-  #"side": "sell"
-  # }
-
   def handle_ws_msg(msg, state) do
     Logger.warn("Unhandled CB WS msg #{inspect msg}")
     {:ok, state}
