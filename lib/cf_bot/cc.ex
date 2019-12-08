@@ -17,7 +17,7 @@ defmodule CfBot.CC do
           ut_pct: 0.0005,
           stable_pct: 0.0001,
           mode: mode,
-          ws: false
+          ws: true
         }
       }
     )

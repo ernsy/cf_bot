@@ -74,7 +74,7 @@ defmodule CfCb.Mediate do
   end
 
   def handle_ws_msg(msg, state) do
-    Logger.warn("Unhandled CB WS msg #{inspect msg}")
+    Logger.debug("Unhandled CB WS msg #{inspect msg}")
     {:ok, state}
   end
 

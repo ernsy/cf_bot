@@ -82,7 +82,7 @@ defmodule CfBot.Statem do
     maker_fee = med_mod.get_maker_fee()
     sell_amt = data[:sell_amt]
     hodl_amt = init_map[:prim_hodl_amt]
-    {new_sell_amt, new_buy_amt} = if init_map[:mode] == "sell" and hodl_amt,
+    {new_sell_amt, new_buy_amt} = if init_map[:mode] == "hodl" and hodl_amt,
                                      do: {max(med_mod.get_avail_bal(prim_curr) - hodl_amt, 0), 0}, else: {sell_amt, 0}
     init_data = %{
       oracle_queue: {queue, 0},
@@ -194,7 +194,7 @@ defmodule CfBot.Statem do
         %{sell_amt: sell_amt} = data
         %{data | sell_amt: sell_amt - vol}
       else
-        %{sell_amt: buy_amt} = data
+        %{buy_amt: buy_amt} = data
         %{data | buy_amt: buy_amt - vol}
       end
     {:keep_state, new_data}
