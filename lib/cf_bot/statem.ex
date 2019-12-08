@@ -55,7 +55,7 @@ defmodule CfBot.Statem do
   #---------------------------------------------------------------------------------------------------------------------
 
   def init(%{min_incr: _, dt_pct: _, ut_pct: _, stable_pct: _} = init_map) do
-    %{name: name, med_mod: med_mod, pair: pair, ref_pair: ref_pair, ws: ws} = init_map
+    %{name: name, med_mod: med_mod, pair: pair, ref_pair: ref_pair, ws: ws, mode: mode} = init_map
     ws_mod = Module.concat([name, WsUserClient])
     ws && DynamicSupervisor.start_child(CfBot.WsSup, {ws_mod, [med_mod, pair]})
     prim_curr = String.slice(pair, 0, 3)
@@ -71,7 +71,7 @@ defmodule CfBot.Statem do
     end
     orders = med_mod.list_open_orders(pair)
     order_length = orders && length(orders)
-    order_map = if  order_length == 1 do
+    order_map = if order_length == 1 and mode != "buy" do
       hd(orders)
     else
       cancel_orders(orders, med_mod)
@@ -82,7 +82,7 @@ defmodule CfBot.Statem do
     maker_fee = med_mod.get_maker_fee()
     sell_amt = data[:sell_amt]
     hodl_amt = init_map[:prim_hodl_amt]
-    {new_sell_amt, new_buy_amt} = if init_map[:mode] == "hodl" and hodl_amt,
+    {new_sell_amt, new_buy_amt} = if mode == "hodl" and hodl_amt,
                                      do: {max(med_mod.get_avail_bal(prim_curr) - hodl_amt, 0), 0}, else: {sell_amt, 0}
     init_data = %{
       oracle_queue: {queue, 0},
@@ -275,7 +275,7 @@ defmodule CfBot.Statem do
     sec_curr = String.slice(pair, -3, 3)
     {bid_price, _} = med_mod.get_ticker(pair)["bid"]
                      |> Float.parse()
-    (med_mod.get_avail_bal(sec_curr) - hodl_amt) / ((bid_price + min_incr) * (1 + fee)) - 0.000001
+    (med_mod.get_avail_bal(sec_curr) - hodl_amt) / ((bid_price + min_incr) * (1 + fee)) - 0.00001
   end
   defp get_mode_buy_amt(%{buy_amt: buy_amt}), do: buy_amt
 
@@ -367,7 +367,7 @@ defmodule CfBot.Statem do
         [med_mod.get_avail_bal(prim_curr), rem_vol]
       else
         bal = med_mod.get_avail_bal(sec_curr)
-        adj_rem_vol = min(rem_vol, (bal - hodl_amt) / ((new_price + min_incr) * (1 + fee)) - 0.000001)
+        adj_rem_vol = (bal - hodl_amt) / ((new_price + min_incr) * (1 + fee)) - 0.00001
         [bal, adj_rem_vol]
       end
     if bal - adj_rem_vol >= hodl_amt and adj_rem_vol >= @min_order_vol do
