@@ -48,6 +48,7 @@ defmodule CfBot.CC do
         }
       }
     )
+    CfBot.Statem.set_mode(CfLuno, "sell")
   end
 
   def start_valr(hodl_amt, mode) do
@@ -72,6 +73,7 @@ defmodule CfBot.CC do
         }
       }
     )
+    CfBot.Statem.set_mode(CfValr, "sell")
   end
 
   def start_cb_test(hodl_amt, mode) do
