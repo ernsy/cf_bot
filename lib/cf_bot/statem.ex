@@ -126,7 +126,13 @@ defmodule CfBot.Statem do
     {:ok, datetime, _} = DateTime.from_iso8601(time)
     seconds_diff = DateTime.diff(datetime, old_datetime)
     if seconds_diff > @trade_delta_sec do
-      {{:value, {q_price, q_datetime}}, queue} = :queue.out(queue)
+      {{q_price, q_datetime}, queue} = dequeue_while(
+        queue,
+        fn ({_q_price, q_datetime}) ->
+          seconds_diff = DateTime.diff(datetime, q_datetime)
+          seconds_diff > @trade_delta_sec
+        end
+      )
       queue = :queue.in({pricef, datetime}, queue)
       {next_state, next_action} = get_next_state_and_action(pricef, state, data)
       new_data = %{data | oracle_queue: {queue, length}, oracle_ref: {q_price, q_datetime}}
@@ -218,6 +224,11 @@ defmodule CfBot.Statem do
     {float_price, _rem_bin} = Float.parse(price)
     {:ok, datetime, _} = DateTime.from_iso8601(time)
     {:ok, [float_price, datetime]}
+  end
+
+  defp dequeue_while(queue, fun) do
+    {{:value, q_entry}, queue} = :queue.out(queue)
+    if fun.(q_entry), do: dequeue_while(queue, fun), else: {q_entry, queue}
   end
 
   defp get_next_state_and_action(pricef, state, %{oracle_ref: {old_price, _old_datetime}} = data) do
