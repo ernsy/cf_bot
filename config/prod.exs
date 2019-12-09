@@ -36,4 +36,5 @@ config :logger, :console,
 
 config :cf_bot,
 cb_uri: "https://api.pro.coinbase.com",
-cb_ws_uri: "wss://ws-feed.pro.coinbase.com"
+#cb_ws_uri: "wss://ws-feed.pro.coinbase.com"
+ cb_ws_uri: "wss://ws-feed-public.sandbox.pro.coinbase.com"

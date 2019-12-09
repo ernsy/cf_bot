@@ -5,15 +5,15 @@ DynamicSupervisor.start_child(CfBot.DynSup,{CfBot.Statem, %{name: CfCb, med_mod:
 CfBot.CC.start_cb(0, "buy")
 CfBot.Statem.set_hodl_amt(CfCb, "secondary", 0)
 
-CfBot.CC.start_luno(0.22218551, "hodl")
+CfBot.CC.start_luno(0.12335483, "hodl")
 CfBot.Statem.set_mode(CfLuno, "sell")
-CfBot.Statem.set_hodl_amt(CfLuno, "primary", 0.19097061)
-CfBot.Statem.set_sell_amt(CfLuno, 0.10730433)
+CfBot.Statem.set_hodl_amt(CfLuno, "primary", 0.12333165)
+CfBot.Statem.set_sell_amt(CfLuno, 0.11226835)
 
-CfBot.CC.start_valr(0.12807640, "hodl")
+CfBot.CC.start_valr(0.37004304, "hodl")
 CfBot.Statem.set_mode(CfValr, "sell")
-CfBot.Statem.set_hodl_amt(CfValr, "primary", 0.0)
-CfBot.Statem.set_sell_amt(CfValr, 0.07949730796)
+CfBot.Statem.set_hodl_amt(CfValr, "primary", 0.36047990)
+CfBot.Statem.set_sell_amt(CfValr, 0.12857651)
 
 CfLuno.Mediate.get_avail_bal("XBT")
 CfValr.Mediate.get_avail_bal("BTC")
