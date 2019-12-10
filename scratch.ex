@@ -3,14 +3,17 @@ DynamicSupervisor.start_child(CfBot.DynSup,{CfBot.Statem, %{name: CfCb, med_mod:
 DynamicSupervisor.start_child(CfBot.DynSup,{CfBot.Statem, %{name: CfCb, med_mod: CfCb.Mediate, pair: "BTC-USD", ref_pair: "BTC-USD", min_incr: 0.01, review_time: 50, dt_pct: 0.0005, ut_pct: 0.0005, stable_pct: 0.0001}})
 
 CfBot.CC.start_cb(0, "buy")
+CfBot.Statem.set_mode(CfCb, "buy")
 CfBot.Statem.set_hodl_amt(CfCb, "secondary", 0)
+CfBot.Statem.set_hodl_amt(CfCb, "primary", 0)
 
-CfBot.CC.start_luno(0.12335483, "hodl")
+
+CfBot.CC.start_luno(0.24639775, "hodl")
 CfBot.Statem.set_mode(CfLuno, "sell")
 CfBot.Statem.set_hodl_amt(CfLuno, "primary", 0.12333165)
 CfBot.Statem.set_sell_amt(CfLuno, 0.11226835)
 
-CfBot.CC.start_valr(0.37004304, "hodl")
+CfBot.CC.start_valr(0.24639775, "hodl")
 CfBot.Statem.set_mode(CfValr, "sell")
 CfBot.Statem.set_hodl_amt(CfValr, "primary", 0.36047990)
 CfBot.Statem.set_sell_amt(CfValr, 0.12857651)

@@ -14,10 +14,6 @@ defmodule CfBot.Statem do
     GenStateMachine.start_link(__MODULE__, init_data, name: name)
   end
 
-  def pause(name) do
-    GenStateMachine.cast(name, :pause)
-  end
-
   def resume(name) do
     GenStateMachine.cast(name, {:resume, {:limit_sell, []}})
   end
@@ -87,7 +83,6 @@ defmodule CfBot.Statem do
     init_data = %{
       oracle_queue: {queue, 0},
       oracle_ref: {oracle_price, datetime},
-      pause: false,
       order_id: nil,
       order_price: 0,
       order_time: :erlang.system_time(:millisecond),
@@ -102,14 +97,9 @@ defmodule CfBot.Statem do
     {:ok, :wait_stable, new_data}
   end
 
-  def handle_event(:cast, :pause, state, data) do
-    Logger.info("Pausing with data:#{inspect data}, state:#{state}")
-    {:keep_state, %{data | pause: true} [{:state_timeout, :infinity, :limit_sell}]}
-  end
-
   def handle_event(:cast, {:resume, action}, state, data) do
     Logger.info("Resuming with data:#{inspect data}, state:#{state}")
-    {:keep_state, %{data | pause: false}, [{:state_timeout, 0, action}]}
+    {:keep_state_and_data, [{:state_timeout, 0, action}]}
   end
 
   def handle_event(:cast, {:set_data, key, val}, state, %{name: name} = data) do
