@@ -20,7 +20,7 @@ defmodule CfLuno.Mediate do
   end
 
   def get_orderbook(pair) do
-    {:ok, orderbook} = JsonUtils.retry_req(&CfLuno.Api.get_orderbook_top/1,[pair])
+    {:ok, orderbook} = JsonUtils.retry_req(&CfLuno.Api.get_orderbook_top/1, [pair])
     orderbook
   end
 
@@ -40,10 +40,10 @@ defmodule CfLuno.Mediate do
   end
 
   def list_open_orders(pair) do
-    {:ok, %{"orders" => orders}} = JsonUtils.retry_req(&CfLuno.Api.list_orders/1 ,[[pair: pair, state: "PENDING"]])
+    {:ok, %{"orders" => orders}} = JsonUtils.retry_req(&CfLuno.Api.list_orders/1, [[pair: pair, state: "PENDING"]])
     orders && Enum.map(
       orders,
-      fn (%{"order_id" => id, "limit_price" => price,  "creation_timestamp" => ts}) ->
+      fn (%{"order_id" => id, "limit_price" => price, "creation_timestamp" => ts}) ->
         {pricef, _} = Float.parse(price)
         %{order_id: id, order_price: pricef, order_time: ts}
       end
@@ -70,7 +70,10 @@ defmodule CfLuno.Mediate do
         (%{"type" => "BID", "volume" => volume}, [vol_ask, vol_bid]) -> [vol_ask, vol_bid + to_float(volume)]
       end
     )
-    vol = %{"ASK" => ask, "BID" => bid}
+    latest_ts = trades
+                |> List.last()
+                |> Map.get("timestamp")
+    vol = %{"ASK" => ask, "BID" => bid, "latest_ts" => latest_ts + 1}
     Logger.info("Traded vol: #{inspect vol}")
     vol
   end
