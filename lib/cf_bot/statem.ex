@@ -79,7 +79,7 @@ defmodule CfBot.Statem do
     sell_amt = data[:sell_amt]
     hodl_amt = init_map[:prim_hodl_amt]
     {new_sell_amt, new_buy_amt} = if mode == "hodl" and hodl_amt,
-                                     do: {max(med_mod.get_avail_bal(prim_curr) - hodl_amt, 0), 0}, else: {sell_amt, 0}
+                                     do: {max(med_mod.get_avail_bal(prim_curr) - hodl_amt - 0.000001, 0), 0}, else: {sell_amt, 0}
     init_data = %{
       oracle_queue: {queue, 0},
       oracle_ref: {oracle_price, datetime},
