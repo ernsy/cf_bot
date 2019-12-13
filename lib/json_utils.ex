@@ -4,26 +4,30 @@ defmodule JsonUtils do
   @sleep_time 1000
   @retry_count 3
 
-  def retry_req(req_fun, params, retry_count \\ @retry_count)
-  def retry_req(req_fun, params, 1) do
+  def retry_req(req_fun, params, back_off_time \\ nil, retry_count \\ @retry_count)
+  def retry_req(req_fun, params, _back_off_time, 1) do
     apply(req_fun, params)
     |> decode_json_response()
   end
-  def retry_req(req_fun, params, retry_count) do
+  def retry_req(req_fun, params, back_off_time, retry_count) do
     http_resp = apply(req_fun, params)
     case decode_json_response(http_resp) do
-      {:error, {status_code, body}} when status_code == 429 or status_code == 500 ->
-        Logger.warn("Response: {#{inspect status_code}, #{inspect body}}")
-        sleep_and_retry(req_fun, params, retry_count)
+      {:error, {429, body}} ->
+        Logger.warn("Response: {429, #{inspect body}}")
+        sleep_and_retry(req_fun, params, back_off_time, retry_count)
+      {:error, {500, body}} ->
+        Logger.warn("Response: {500, #{inspect body}}")
+        sleep_and_retry(req_fun, params, nil, retry_count)
       {:error, %HTTPoison.Error{id: nil, reason: reason}} when reason == :closed or reason == :timeout ->
-        sleep_and_retry(req_fun, params, retry_count)
+        sleep_and_retry(req_fun, params, nil, retry_count)
       response ->
         response
     end
   end
 
-  defp sleep_and_retry(req_fun, params, retry_count)  do
-    Process.sleep(round(@sleep_time))
+  defp sleep_and_retry(req_fun, params, back_off_time, retry_count)  do
+    sleep_time = back_off_time || @sleep_time
+    Process.sleep(sleep_time)
     retry_req(req_fun, params, retry_count - 1)
   end
 
