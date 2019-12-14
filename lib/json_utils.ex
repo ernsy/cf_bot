@@ -28,7 +28,7 @@ defmodule JsonUtils do
   defp sleep_and_retry(req_fun, params, back_off_time, retry_count)  do
     sleep_time = back_off_time || @sleep_time
     Process.sleep(sleep_time)
-    retry_req(req_fun, params, retry_count - 1)
+    retry_req(req_fun, params, back_off_time, retry_count - 1)
   end
 
   def decode_json_response({:ok, %HTTPoison.Response{status_code: code, body: json_body}})
