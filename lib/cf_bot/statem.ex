@@ -371,7 +371,7 @@ defmodule CfBot.Statem do
         adj_rem_vol = (bal - hodl_amt) / ((new_price + min_incr) * (1 + fee)) - 0.00001
         [bal, adj_rem_vol]
       end
-    if bal >= hodl_amt and adj_rem_vol >= @min_order_vol do
+    if bal - adj_rem_vol >= hodl_amt and adj_rem_vol >= @min_order_vol do
       new_order_id = med_mod.post_order(pair, type, adj_rem_vol, new_price, "true")
       {:ok, [ts, adj_rem_vol, alt_vol, new_order_id, r_time]}
     else
