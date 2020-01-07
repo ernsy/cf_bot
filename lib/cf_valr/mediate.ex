@@ -2,13 +2,13 @@ defmodule CfValr.Mediate do
   require Logger
 
   def get_ticker(pair) do
-    {:ok, %{"askPrice" => ask, "bidPrice" => bid}} = JsonUtils.retry_req(&CfValr.Api.get_ticker/1, [pair], 60000)
+    {:ok, %{"askPrice" => ask, "bidPrice" => bid}} = JsonUtils.retry_req(&CfValr.Api.get_ticker/1, [pair], 61000)
     %{"ask" => ask, "bid" => bid}
   end
 
   def get_avail_bal(currency) do
     {:ok, balances} =
-      JsonUtils.retry_req(&CfValr.Api.balances/0, [], 60000)
+      JsonUtils.retry_req(&CfValr.Api.balances/0, [], 61000)
     %{"available" => avail_str, "reserved" => res_str} =
       Enum.find(balances, fn (%{"currency" => curr}) -> curr == currency end)
     {avail_bal, _rem_bin} = Float.parse(avail_str)
@@ -23,7 +23,7 @@ defmodule CfValr.Mediate do
   end
 
   def get_orderbook(pair) do
-    {:ok, %{"Bids" => bids, "Asks" => asks}} = JsonUtils.retry_req(&CfValr.Api.get_orderbook_top/1, [pair], 60000)
+    {:ok, %{"Bids" => bids, "Asks" => asks}} = JsonUtils.retry_req(&CfValr.Api.get_orderbook_top/1, [pair], 61000)
     mediated_bids = mediate_order_book(bids)
     mediated_asks = mediate_order_book(asks)
     %{"bids" => mediated_bids, "asks" => mediated_asks}
@@ -35,18 +35,18 @@ defmodule CfValr.Mediate do
     side = if type == "ASK", do: "sell", else: "buy"
     Logger.info("Place limit #{type} for #{q_str} at #{price_str}")
     params = %{pair: pair, side: side, quantity: q_str, price: price_str, post_only: post_only}
-    {:ok, %{"id" => new_order_id}} = JsonUtils.retry_req(&CfValr.Api.post_limit_order/1, [params], 60000)
+    {:ok, %{"id" => new_order_id}} = JsonUtils.retry_req(&CfValr.Api.post_limit_order/1, [params], 61000)
     new_order_id
   end
 
   def stop_order(order_id, price) do
     Logger.info("Cancel limit order #{order_id} at #{price}")
     params = %{"orderId" => order_id, "pair" => "BTCZAR"} #TODO make pair variable
-    JsonUtils.retry_req(&CfValr.Api.delete_order/1, [params], 60000)
+    JsonUtils.retry_req(&CfValr.Api.delete_order/1, [params], 61000)
   end
 
   def list_open_orders(pair) do
-    {:ok, orders} = JsonUtils.retry_req(&CfValr.Api.list_orders/0, [], 60000)
+    {:ok, orders} = JsonUtils.retry_req(&CfValr.Api.list_orders/0, [], 61000)
     orders &&
       Enum.filter(orders, &(&1["currencyPair"] == pair))
       |> Enum.map(
@@ -60,7 +60,7 @@ defmodule CfValr.Mediate do
 
   def sum_trades(_product_id, _since, _, true), do: %{"ASK" => 0, "BID" => 0}
   def sum_trades(pair, since, _order_id, _) do
-    {:ok, trades} = JsonUtils.retry_req(&CfValr.Api.get_trade_history/2, [pair, "10"], 60000)
+    {:ok, trades} = JsonUtils.retry_req(&CfValr.Api.get_trade_history/2, [pair, "10"], 61000)
     get_traded_volume(trades, since)
   end
 
