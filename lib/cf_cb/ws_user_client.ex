@@ -10,12 +10,12 @@ defmodule CfCb.WsUserClient do
   end
 
   def handle_connect(_conn, state) do
-    IO.puts("CB User WS connected!")
+    Logger.info("CB User WS connected!")
     {:ok, state}
   end
 
   def handle_disconnect(_conn, state) do
-    IO.puts("CB User WS disconnected")
+    Logger.info("CB User WS disconnected")
     {:ok, state}
   end
 

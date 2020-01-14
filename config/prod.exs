@@ -31,7 +31,7 @@ config :logger,
        level: :info
 
 config :logger, :console,
-       level: :info
+       level: :warn
        #metadata: [:module, :line, :function]
 
 config :cf_bot,
