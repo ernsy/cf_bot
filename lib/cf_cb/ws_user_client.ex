@@ -1,5 +1,6 @@
 defmodule CfCb.WsUserClient do
   use WebSockex
+  require Logger
 
   @url Application.get_env(:cf_bot, :cb_ws_uri, "wss://ws-feed-public.sandbox.pro.coinbase.com")
 

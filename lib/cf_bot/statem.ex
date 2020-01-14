@@ -120,7 +120,7 @@ defmodule CfBot.Statem do
         queue,
         fn ({_q_price, q_datetime}) ->
           seconds_diff = DateTime.diff(datetime, q_datetime)
-          seconds_diff > @trade_delta_sec
+          seconds_diff >= @trade_delta_sec
         end
       )
       queue = :queue.in({pricef, datetime}, queue)

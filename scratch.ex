@@ -8,7 +8,7 @@ CfBot.Statem.set_hodl_amt(CfCb, "secondary", 0)
 CfBot.Statem.set_hodl_amt(CfCb, "primary", 0)
 
 
-CfBot.CC.start_luno(0.55419526, "hodl")
+CfBot.CC.start_luno(0.7188641461, "hodl")
 CfBot.Statem.set_mode(CfLuno, "sell")
 CfBot.Statem.set_hodl_amt(CfLuno, "primary", 0.24690693)
 CfBot.Statem.set_sell_amt(CfLuno, 0.252517)

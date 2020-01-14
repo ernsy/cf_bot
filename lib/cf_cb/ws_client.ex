@@ -1,5 +1,6 @@
 defmodule CfCb.WsClient do
   use WebSockex
+  require Logger
 
   @url "wss://ws-feed.pro.coinbase.com"
 
