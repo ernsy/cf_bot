@@ -64,9 +64,9 @@ defmodule CfBot.CC do
           min_incr: 1,
           long_review_time: 8000,
           short_review_time: 5000,
-          dt_pct: 0.001,
-          ut_pct: 0.001,
-          stable_pct: 0.00025,
+          dt_pct: 0.0015,
+          ut_pct: 0.0015,
+          stable_pct: 0.000375,
           prim_hodl_amt: hodl_amt,
           mode: mode,
           ws: true
