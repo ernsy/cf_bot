@@ -31,7 +31,7 @@ defmodule CfCb.Mediate do
 
   def post_order(product_id, type, size, price, post_only) do
     size_str = :erlang.float_to_binary(size, [{:decimals, 6}])
-    price_str = :erlang.float_to_binary(price, [{:decimals, 2}])
+    price_str = :erlang.float_to_binary(price, [{:decimals, 6}])
     side = if type == "ASK", do: "sell", else: "buy"
     Logger.info("Place limit #{type} for #{size_str} at #{price_str}")
     params = %{product_id: product_id, side: side, size: size_str, price: price_str, post_only: post_only}

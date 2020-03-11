@@ -8,16 +8,16 @@ CfBot.Statem.set_hodl_amt(CfCb, "secondary", 0)
 CfBot.Statem.set_hodl_amt(CfCb, "primary", 0)
 
 
-CfBot.CC.start_luno(0.5216079519, "hodl")
+CfBot.CC.start_luno(0.1320718507, "hodl")
 CfBot.Statem.set_mode(CfLuno, "sell")
-CfBot.Statem.set_hodl_amt(CfLuno, "primary", 0.24690693)
-CfBot.Statem.set_sell_amt(CfLuno, 0.252517)
+CfBot.Statem.set_hodl_amt(CfLuno, "primary", 0.5272085169)
+CfBot.Statem.set_sell_amt(CfLuno, 0.3323692912)
 CfBot.Statem.resume(CfLuno)
 
-CfBot.CC.start_valr(0.0, "hodl")
+CfBot.CC.start_valr(0.1412193753, "hodl")
 CfBot.Statem.set_mode(CfValr, "sell")
-CfBot.Statem.set_hodl_amt(CfValr, "primary", 0.57878580696-0.1067078-0.377496)
-CfBot.Statem.set_sell_amt(CfValr, 0.1067078+0.377496)
+CfBot.Statem.set_hodl_amt(CfValr, "primary", 0.3599514077)
+CfBot.Statem.set_sell_amt(CfValr, 0.02127686226)
 CfBot.Statem.resume(CfValr)
 
 CfLuno.Mediate.get_avail_bal("XBT")
@@ -34,3 +34,26 @@ c("lib/cf_valr/mediate.ex")
 c("lib/cf_bot/statem.ex")
 c("lib/cf_bot/transitions.ex")
 c("lib/json_utils.ex")
+
+DynamicSupervisor.start_child(
+      CfBot.DynSup,
+      {
+        CfBot.Statem,
+        %{
+          name: CfCb,
+          med_mod: CfCb.Mediate,
+          pair: "ETH-BTC",
+          ref_pair: "BTC-USD",
+          min_incr: 0.00001,
+          long_review_time: 3000,
+          short_review_time: 1000,
+          dt_pct: 0.0015,
+          ut_pct: 0.0015,
+          stable_pct: 0.000375,
+          prim_hodl_amt: 0,
+          mode: "hodl",
+          ws: false
+        }
+      }
+    )
+    CfBot.Statem.set_mode(CfCb, "sell")

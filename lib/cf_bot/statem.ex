@@ -79,7 +79,11 @@ defmodule CfBot.Statem do
     sell_amt = data[:sell_amt]
     hodl_amt = init_map[:prim_hodl_amt]
     {new_sell_amt, new_buy_amt} = if mode == "hodl" and hodl_amt,
-                                     do: {max(med_mod.get_avail_bal(prim_curr) - hodl_amt - 0.000001, 0), 0}, else: {sell_amt, 0}
+                                     do: {max(med_mod.get_avail_bal(prim_curr) - hodl_amt - 0.000001, 0), 0},
+                                     else: {
+                                       sell_amt,
+                                       0
+                                     }
     init_data = %{
       oracle_queue: {queue, 0},
       oracle_ref: {oracle_price, datetime},
@@ -150,10 +154,11 @@ defmodule CfBot.Statem do
       hodl_amt = data[hodl_amt_key]
       vol_before_order = if state == :quick_sell or state == :quick_buy, do: 0, else: order_vol
       {:ok, new_price} = calc_limit_order_price(vol_before_order, order_vol, type, data)
-      {:ok, [timestamp, rem_vol, alt_vol, new_order_id, review_time]} =
+      {:ok, [timestamp, old_rem_vol, rem_vol, alt_vol, new_order_id, review_time]} =
         place_limit_order(new_price, order_vol, alt_vol, hodl_amt, type, data)
       new_data = %{data | vol_key => rem_vol, alt_vol_key => alt_vol}
       new_data = %{new_data | :order_time => timestamp, :order_id => new_order_id, :order_price => new_price}
+      new_data = Map.put(new_data, :old_amt, old_rem_vol)
       :ok = :dets.insert(name, {:data, new_data})
       {:keep_state, new_data, [{:state_timeout, review_time, {action, []}} | post_actions]}
     else
@@ -227,7 +232,7 @@ defmodule CfBot.Statem do
     cond do
       sell_amt > 0 and buy_amt > 0 ->
         check_delta(old_price, pricef, dt_pct, ut_pct, s_pct, transitions[:buy_or_sell])
-      sell_amt > 0 ->
+      sell_amt > 0 or mode == "sell" or mode == "hodl" ->
         check_delta(old_price, pricef, dt_pct, ut_pct, s_pct, transitions[:sell])
       buy_amt > 0 or mode == "buy" ->
         check_delta(old_price, pricef, dt_pct, ut_pct, s_pct, transitions[:buy])
@@ -255,11 +260,33 @@ defmodule CfBot.Statem do
     Logger.warn("State change:#{next_state}")
     Logger.info("old oracle price: #{old_price}, new oracle price:#{pricef}")
     new_buy_amt = get_mode_buy_amt(data)
+    new_sell_amt = get_mode_sell_amt(data)
     next_action = if next_action == :cancel_orders,
                      do: {:next_event, :internal, :cancel_orders},
                      else: {:state_timeout, review_time, next_action}
-    {:next_state, next_state, %{data | buy_amt: new_buy_amt}, next_action}
+    {:next_state, next_state, %{data | buy_amt: new_buy_amt, sell_amt: new_sell_amt}, next_action}
   end
+
+  defp get_mode_sell_amt(
+         %{
+           sell_amt: sell_amt,
+           old_amt: old_amt,
+           pair: pair,
+           prim_hodl_amt: hodl_amt,
+           med_mod: med_mod,
+           mode: "sell"
+         }
+       )
+       when sell_amt <= 0 do
+    prim_curr = String.slice(pair, 0, 3)
+    new_sell_amt = max(med_mod.get_avail_bal(prim_curr) - hodl_amt - 0.000001, 0)
+    if new_sell_amt <= old_amt do
+      new_sell_amt
+    else
+      sell_amt
+    end
+  end
+  defp get_mode_sell_amt(%{sell_amt: sell_amt}), do: sell_amt
 
   defp get_mode_buy_amt(
          %{
@@ -351,7 +378,7 @@ defmodule CfBot.Statem do
     [rem_vol, alt_vol] = get_return_values(traded_vol, new_vol, alt_vol, mode)
     rem_vol_str = :erlang.float_to_binary(rem_vol, [{:decimals, 6}])
     Logger.info("Keep limit order #{order_id} remaining volume #{rem_vol_str} at #{old_price}")
-    {:ok, [ts, rem_vol, alt_vol, order_id, r_time]}
+    {:ok, [ts, rem_vol, rem_vol, alt_vol, order_id, r_time]}
   end
   defp place_limit_order(new_price, new_vol, alt_vol, hodl_amt, type, data) do
     %{order_time: old_ts, order_price: old_price, order_id: order_id} = data
@@ -373,9 +400,9 @@ defmodule CfBot.Statem do
       end
     if bal - adj_rem_vol >= hodl_amt and adj_rem_vol >= @min_order_vol do
       new_order_id = med_mod.post_order(pair, type, adj_rem_vol, new_price, "true")
-      {:ok, [ts, adj_rem_vol, alt_vol, new_order_id, r_time]}
+      {:ok, [ts, adj_rem_vol, adj_rem_vol, alt_vol, new_order_id, r_time]}
     else
-      {:ok, [ts, 0, alt_vol, order_id, 0]}
+      {:ok, [ts, adj_rem_vol, 0, alt_vol, order_id, 0]}
     end
   end
 
