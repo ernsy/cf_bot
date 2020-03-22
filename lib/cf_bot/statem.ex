@@ -20,6 +20,7 @@ defmodule CfBot.Statem do
 
   def set_sell_amt(name, amount) when is_float(amount) do
     GenStateMachine.cast(name, {:set_data, :sell_amt, amount})
+    GenStateMachine.cast(name, {:set_data, :old_amt, amount})
   end
 
   def set_buy_amt(name, amount) when is_float(amount) do
@@ -106,6 +107,17 @@ defmodule CfBot.Statem do
     {:keep_state_and_data, [{:state_timeout, 0, action}]}
   end
 
+  def handle_event(:cast, {:set_data, :prim_hodl_amt, val}, state, data) do
+    %{name: name, pair: pair, med_mod: med_mod} = data
+    prim_curr = String.slice(pair, 0, 3)
+    sell_amt = max(med_mod.get_avail_bal(prim_curr) - val - 0.000001, 0)
+    Logger.info("Set :prim_hodl_amt to:#{val} and :sell_amt to :#{sell_amt}, state:#{state}")
+    new_data = %{data | prim_hodl_amt:  val, sell_amt: sell_amt, old_amt: sell_amt}
+    :ok = :dets.insert(name, {:data, new_data})
+    Logger.info("New data #{inspect new_data}")
+    {:keep_state, new_data}
+  end
+
   def handle_event(:cast, {:set_data, key, val}, state, %{name: name} = data) do
     Logger.info("Set #{key} to:#{val}, state:#{state}")
     new_data = %{data | key => val}
@@ -162,7 +174,7 @@ defmodule CfBot.Statem do
       :ok = :dets.insert(name, {:data, new_data})
       {:keep_state, new_data, [{:state_timeout, review_time, {action, []}} | post_actions]}
     else
-      next_state = if mode == "buy", do: :wait_stable, else: state
+      next_state = if mode == "buy" or mode == "sell", do: :wait_stable, else: state
       Logger.warn("Volume below minimum, next state: #{next_state}")
       {:next_state, next_state, %{data | vol_key => 0, :order_price => 0}, []}
     end
