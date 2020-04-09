@@ -112,7 +112,7 @@ defmodule CfBot.Statem do
     prim_curr = String.slice(pair, 0, 3)
     sell_amt = max(med_mod.get_avail_bal(prim_curr) - val - 0.000001, 0)
     Logger.info("Set :prim_hodl_amt to:#{val} and :sell_amt to :#{sell_amt}, state:#{state}")
-    new_data = %{data | prim_hodl_amt:  val, sell_amt: sell_amt, old_amt: sell_amt}
+    new_data = %{data | prim_hodl_amt: val, sell_amt: sell_amt, old_amt: sell_amt}
     :ok = :dets.insert(name, {:data, new_data})
     Logger.info("New data #{inspect new_data}")
     {:keep_state, new_data}
@@ -291,7 +291,9 @@ defmodule CfBot.Statem do
        )
        when sell_amt <= 0 do
     prim_curr = String.slice(pair, 0, 3)
-    new_sell_amt = max(med_mod.get_avail_bal(prim_curr) - hodl_amt - 0.000001, 0)
+    new_sell_amt = med_mod.get_avail_bal(prim_curr) - hodl_amt - 0.000001
+                   |> Float.floor(6)
+                   |> max(0)
     if new_sell_amt <= old_amt do
       new_sell_amt
     else
@@ -412,9 +414,9 @@ defmodule CfBot.Statem do
       end
     if bal - adj_rem_vol >= hodl_amt and adj_rem_vol >= @min_order_vol do
       new_order_id = med_mod.post_order(pair, type, adj_rem_vol, new_price, "true")
-      {:ok, [ts, adj_rem_vol, adj_rem_vol, alt_vol, new_order_id, r_time]}
+      {:ok, [ts, rem_vol, adj_rem_vol, alt_vol, new_order_id, r_time]}
     else
-      {:ok, [ts, adj_rem_vol, 0, alt_vol, order_id, 0]}
+      {:ok, [ts, rem_vol, 0, alt_vol, order_id, 0]}
     end
   end
 
