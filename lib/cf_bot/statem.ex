@@ -110,9 +110,11 @@ defmodule CfBot.Statem do
   def handle_event(:cast, {:set_data, :prim_hodl_amt, val}, state, data) do
     %{name: name, pair: pair, med_mod: med_mod} = data
     prim_curr = String.slice(pair, 0, 3)
-    sell_amt = max(med_mod.get_avail_bal(prim_curr) - val - 0.000001, 0)
+    sell_amt = med_mod.get_avail_bal(prim_curr) - val - 0.000001
+               |> Float.floor(6)
+               |> max(0)
     Logger.info("Set :prim_hodl_amt to:#{val} and :sell_amt to :#{sell_amt}, state:#{state}")
-    new_data = %{data | prim_hodl_amt: val, sell_amt: sell_amt, old_amt: sell_amt}
+    new_data = %{data | prim_hodl_amt: val, sell_amt: sell_amt, old_amt: sell_amt, order_id:  nil}
     :ok = :dets.insert(name, {:data, new_data})
     Logger.info("New data #{inspect new_data}")
     {:keep_state, new_data}

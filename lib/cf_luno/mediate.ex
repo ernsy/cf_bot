@@ -36,7 +36,7 @@ defmodule CfLuno.Mediate do
   def stop_order(order_id, price) do
     Logger.info("Cancel limit order #{order_id} at #{price}")
     JsonUtils.retry_req(&CfLuno.Api.stop_order/1, [order_id])
-    Process.sleep(250) #wait for balance to update after cancelling order
+    Process.sleep(4000) #wait for balance to update after cancelling order
   end
 
   def list_open_orders(pair) do

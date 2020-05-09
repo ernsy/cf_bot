@@ -2,24 +2,22 @@ DynamicSupervisor.start_child(CfBot.DynSup,{CfBot.Statem,%{name: CfLuno, med_mod
 DynamicSupervisor.start_child(CfBot.DynSup,{CfBot.Statem, %{name: CfCb, med_mod: CfCb.TestMed, pair: "BTC-GBP", ref_pair: "BTC-USD", min_incr: 0.01, review_time: 50, dt_pct: 0.0005, ut_pct: 0.0005, stable_pct: 0.0001}})
 DynamicSupervisor.start_child(CfBot.DynSup,{CfBot.Statem, %{name: CfCb, med_mod: CfCb.Mediate, pair: "BTC-USD", ref_pair: "BTC-USD", min_incr: 0.01, review_time: 50, dt_pct: 0.0005, ut_pct: 0.0005, stable_pct: 0.0001}})
 
-CfBot.CC.start_cb(0, "buy")
+CfBot.CC.start_cb(CfCb.Mediate.get_avail_bal("GBP")/3*2, "buy")
 CfBot.Statem.set_mode(CfCb, "buy")
 CfBot.Statem.set_hodl_amt(CfCb, "secondary", 0)
-CfBot.Statem.set_hodl_amt(CfCb, "primary", 0)
 
-
-CfBot.CC.start_luno(0.267008784, "hodl")
+CfBot.CC.start_luno(0.29669779, "hodl")
 CfBot.Statem.set_mode(CfLuno, "sell")
-CfBot.Statem.set_hodl_amt(CfLuno, "primary", 0.4967331051)
-CfBot.Statem.set_hodl_amt(CfLuno, "primary", CfLuno.Mediate.get_avail_bal("XBT") - 0.4852203556)
-CfBot.Statem.set_sell_amt(CfLuno, 0.42180249+0.339348)
+CfBot.Statem.set_hodl_amt(CfLuno, "primary", 0.35707245)
+CfBot.Statem.set_hodl_amt(CfLuno, "primary", CfLuno.Mediate.get_avail_bal("XBT") - 0.06159683222)
+CfBot.Statem.set_sell_amt(CfLuno, 0.1195040383)
 CfBot.Statem.resume(CfLuno)
 
 CfBot.CC.start_valr(0.18540817, "hodl")
 CfBot.Statem.set_mode(CfValr, "sell")
-CfBot.Statem.set_hodl_amt(CfValr, "primary", 0.2583172325)
-CfBot.Statem.set_hodl_amt(CfValr, "primary", CfValr.Mediate.get_avail_bal("BTC") - 0.06017048656)
-CfBot.Statem.set_sell_amt(CfValr, 0.09448524768)
+CfBot.Statem.set_hodl_amt(CfValr, "primary", 0.3320529407)
+CfBot.Statem.set_hodl_amt(CfValr, "primary", CfValr.Mediate.get_avail_bal("BTC") - 0.1100510911)
+CfBot.Statem.set_sell_amt(CfValr, 0.06159683222)
 CfBot.Statem.resume(CfValr)
 
 CfLuno.Mediate.get_avail_bal("XBT")
@@ -42,20 +40,20 @@ DynamicSupervisor.start_child(
       {
         CfBot.Statem,
         %{
-          name: CfCb,
-          med_mod: CfCb.Mediate,
-          pair: "ETH-BTC",
-          ref_pair: "BTC-USD",
-          min_incr: 0.00001,
+          name: CfLuno,
+          med_mod: CfLuno.Mediate,
+          pair: "ETHXBT",
+          ref_pair: "ETH-BTC",
+          min_incr: 1,
           long_review_time: 3000,
           short_review_time: 1000,
           dt_pct: 0.0015,
           ut_pct: 0.0015,
           stable_pct: 0.000375,
           prim_hodl_amt: 0,
-          mode: "hodl",
+          mode: "sell",
           ws: false
         }
       }
     )
-    CfBot.Statem.set_mode(CfCb, "sell")
+CfBot.Statem.set_mode(CfLuno, "sell")
