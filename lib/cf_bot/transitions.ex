@@ -1,8 +1,9 @@
 defmodule CfBot.Transitions do
   
-  @limit_sell_action {:limit_sell, []}
-  @limit_buy_action {:limit_buy, []}
-  @cancel_order_action :cancel_orders
+  @limit_sell_action {:next_event, :internal, :limit_sell}
+  @delayed_limit_sell_action {:state_timeout, 60000, :limit_sell}
+  @limit_buy_action {:next_event, :internal, :limit_buy}
+  @cancel_order_action {:next_event, :internal, :cancel_orders}
 
   def wait_stable() do
     %{
@@ -16,16 +17,16 @@ defmodule CfBot.Transitions do
       },
       sell:
       %{
-        stable: {:sell, @limit_sell_action},
+        stable: {:sell, @delayed_limit_sell_action},
         up_trend: {:wait_stable, []},
-        down_trend: {:quick_sell, @limit_sell_action},
+        down_trend: {:sell, @limit_sell_action},
         positive: {:wait_stable, []},
-        negative: {:sell, @limit_sell_action}
+        negative: {:sell, @delayed_limit_sell_action}
       },
       buy:
       %{
         stable: {:buy, @limit_buy_action},
-        up_trend: {:quick_buy, @limit_buy_action},
+        up_trend: {:buy, @limit_buy_action},
         down_trend: {:wait_stable, []},
         positive: {:buy, @limit_buy_action},
         negative: {:wait_stable, []}
@@ -112,7 +113,7 @@ defmodule CfBot.Transitions do
       buy:
       %{
         stable: {:buy, @limit_buy_action},
-        up_trend: {:quick_buy, @limit_buy_action},
+        up_trend: {:buy, @limit_buy_action},
         down_trend: {:wait_stable, @cancel_order_action},
         positive: {:buy, @limit_buy_action},
         negative: {:buy, @limit_buy_action}

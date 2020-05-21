@@ -14,7 +14,7 @@ defmodule CfBot.CC do
           short_review_time: 50,
           long_review_time: 50,
           dt_pct: 0.00025,
-          ut_pct: 0.00025,
+          ut_pct: 0.0005,
           stable_pct: 0.00005,
           mode: mode,
           ws: true

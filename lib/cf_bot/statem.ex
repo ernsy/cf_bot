@@ -153,7 +153,7 @@ defmodule CfBot.Statem do
     end
   end
 
-  def handle_event(event_type, {action, post_actions}, state, %{mode: mode, name: name} = data)
+  def handle_event(event_type, action, state, %{mode: mode, name: name} = data)
       when
         (event_type == :internal or event_type == :state_timeout) and (action == :limit_sell or action == :limit_buy) do
     [vol_key, alt_vol_key, hodl_amt_key, type] =
@@ -174,7 +174,7 @@ defmodule CfBot.Statem do
       new_data = %{new_data | :order_time => timestamp, :order_id => new_order_id, :order_price => new_price}
       new_data = Map.put(new_data, :old_amt, old_rem_vol)
       :ok = :dets.insert(name, {:data, new_data})
-      {:keep_state, new_data, [{:state_timeout, review_time, {action, []}} | post_actions]}
+      {:keep_state, new_data, {:state_timeout, review_time, action}}
     else
       next_state = if mode == "buy" or mode == "sell", do: :wait_stable, else: state
       Logger.warn("Volume below minimum, next state: #{next_state}")
@@ -270,14 +270,11 @@ defmodule CfBot.Statem do
     {:next_state, state, data}
   end
   defp do_state_change(pricef, _state, next_state, next_action, data) do
-    %{oracle_ref: {old_price, _old_datetime}, long_review_time: review_time} = data
+    %{oracle_ref: {old_price, _old_datetime}} = data
     Logger.warn("State change:#{next_state}")
     Logger.info("old oracle price: #{old_price}, new oracle price:#{pricef}")
     new_buy_amt = get_mode_buy_amt(data)
     new_sell_amt = get_mode_sell_amt(data)
-    next_action = if next_action == :cancel_orders,
-                     do: {:next_event, :internal, :cancel_orders},
-                     else: {:state_timeout, review_time, next_action}
     {:next_state, next_state, %{data | buy_amt: new_buy_amt, sell_amt: new_sell_amt}, next_action}
   end
 
