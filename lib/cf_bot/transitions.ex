@@ -113,7 +113,7 @@ defmodule CfBot.Transitions do
       buy:
       %{
         stable: {:buy, @limit_buy_action},
-        up_trend: {:buy, @limit_buy_action},
+        up_trend: {:quick_buy, @limit_buy_action},
         down_trend: {:wait_stable, @cancel_order_action},
         positive: {:buy, @limit_buy_action},
         negative: {:buy, @limit_buy_action}
@@ -144,7 +144,7 @@ defmodule CfBot.Transitions do
         stable: {:buy, @limit_buy_action},
         up_trend: {:quick_buy, @limit_buy_action},
         down_trend: {:wait_stable, @cancel_order_action},
-        positive: {:quick_buy, @limit_buy_action},
+        positive: {:buy, @limit_buy_action},
         negative: {:buy, @limit_buy_action}
       }
     }
