@@ -14,7 +14,7 @@ defmodule JsonUtils do
     case decode_json_response(http_resp) do
       {:error, {429, _body}} ->
         sleep_and_retry(req_fun, params, back_off_time, retry_count)
-      {:error, {code, _body}} when code == 500 or code == 404->
+      {:error, {code, _body}} when code == 500 or code == 404 or code == 504->
         sleep_and_retry(req_fun, params, nil, retry_count)
       {:error, %HTTPoison.Error{id: nil, reason: reason}} when reason == :closed or reason == :timeout ->
         sleep_and_retry(req_fun, params, nil, retry_count)

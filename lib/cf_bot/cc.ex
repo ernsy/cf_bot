@@ -39,6 +39,31 @@ defmodule CfBot.CC do
           min_incr: 1,
           long_review_time: 3000,
           short_review_time: 1000,
+          dt_pct: 0.001,
+          ut_pct: 0.001,
+          stable_pct: 0.000375,
+          prim_hodl_amt: hodl_amt,
+          mode: mode,
+          ws: false
+        }
+      }
+    )
+    CfBot.Statem.set_mode(CfLuno, "sell")
+  end
+
+  def start_luno_eth(hodl_amt, mode) do
+    DynamicSupervisor.start_child(
+      CfBot.DynSup,
+      {
+        CfBot.Statem,
+        %{
+          name: CfLunoEth,
+          med_mod: CfLuno.Mediate,
+          pair: "ETHZAR",
+          ref_pair: "ETH-USD",
+          min_incr: 1,
+          long_review_time: 3000,
+          short_review_time: 1000,
           dt_pct: 0.0015,
           ut_pct: 0.0015,
           stable_pct: 0.000375,
@@ -48,7 +73,7 @@ defmodule CfBot.CC do
         }
       }
     )
-    CfBot.Statem.set_mode(CfLuno, "sell")
+    CfBot.Statem.set_mode(CfLunoEth, "sell")
   end
 
   def start_valr(hodl_amt, mode) do
