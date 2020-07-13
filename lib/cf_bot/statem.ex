@@ -51,7 +51,7 @@ defmodule CfBot.Statem do
   # callbacks
   #---------------------------------------------------------------------------------------------------------------------
 
-  def init(%{min_incr: _, dt_pct: _, ut_pct: _, stable_pct: _} = init_map) do
+  def init(%{min_incr: _, dt_pct: _, ut_pct: _, stable_pct: _, bv_pct: _} = init_map) do
     %{name: name, med_mod: med_mod, pair: pair, ref_pair: ref_pair, ws: ws, mode: mode} = init_map
     ws_mod = Module.concat([name, WsUserClient])
     ws && DynamicSupervisor.start_child(CfBot.WsSup, {ws_mod, [med_mod, pair]})
@@ -114,7 +114,7 @@ defmodule CfBot.Statem do
                |> Float.floor(6)
                |> max(0)
     Logger.info("Set :prim_hodl_amt to:#{val} and :sell_amt to :#{sell_amt}, state:#{state}")
-    new_data = %{data | prim_hodl_amt: val, sell_amt: sell_amt, old_amt: sell_amt, order_id:  nil}
+    new_data = %{data | prim_hodl_amt: val, sell_amt: sell_amt, old_amt: sell_amt, order_id: nil}
     :ok = :dets.insert(name, {:data, new_data})
     Logger.info("New data #{inspect new_data}")
     {:keep_state, new_data}
@@ -129,19 +129,13 @@ defmodule CfBot.Statem do
   end
 
   def handle_event(:cast, {:oracle_update, %{"price" => price, "time" => time}}, state, data) do
-    %{oracle_ref: {_old_price, old_datetime}, oracle_queue: {queue, length}} = data
+    %{oracle_ref: {old_price, old_datetime}, oracle_queue: {queue, length}} = data
     {pricef, _rem_bin} = Float.parse(price)
     {:ok, datetime, _} = DateTime.from_iso8601(time)
     seconds_diff = DateTime.diff(datetime, old_datetime)
     if seconds_diff > @trade_delta_sec do
-      {{q_price, q_datetime}, queue} = dequeue_while(
-        queue,
-        fn ({_q_price, q_datetime}) ->
-          seconds_diff = DateTime.diff(datetime, q_datetime)
-          seconds_diff >= @trade_delta_sec
-        end
-      )
       queue = :queue.in({pricef, datetime}, queue)
+      {{q_price, q_datetime}, queue} = dequeue_while(queue, datetime, {old_price, old_datetime})
       {next_state, next_action} = get_next_state_and_action(pricef, state, data)
       new_data = %{data | oracle_queue: {queue, length}, oracle_ref: {q_price, q_datetime}}
       Logger.debug("Time between trades: #{seconds_diff}")
@@ -153,7 +147,7 @@ defmodule CfBot.Statem do
     end
   end
 
-  def handle_event(event_type, action, state, %{mode: mode, name: name} = data)
+  def handle_event(event_type, action, state, %{mode: mode, name: name, bv_pct: bv_pct} = data)
       when
         (event_type == :internal or event_type == :state_timeout) and (action == :limit_sell or action == :limit_buy) do
     [vol_key, alt_vol_key, hodl_amt_key, type] =
@@ -166,7 +160,7 @@ defmodule CfBot.Statem do
     if order_vol >= @min_order_vol do
       alt_vol = data[alt_vol_key]
       hodl_amt = data[hodl_amt_key]
-      vol_before_order = if state == :quick_sell or state == :quick_buy, do: 0, else: order_vol
+      vol_before_order = if state == :quick_sell or state == :quick_buy, do: 0, else: order_vol * bv_pct
       {:ok, new_price} = calc_limit_order_price(vol_before_order, order_vol, type, data)
       {:ok, [timestamp, old_rem_vol, rem_vol, alt_vol, new_order_id, review_time]} =
         place_limit_order(new_price, order_vol, alt_vol, hodl_amt, type, data)
@@ -235,9 +229,18 @@ defmodule CfBot.Statem do
     {:ok, [float_price, datetime]}
   end
 
-  defp dequeue_while(queue, fun) do
-    {{:value, q_entry}, queue} = :queue.out(queue)
-    if fun.(q_entry), do: dequeue_while(queue, fun), else: {q_entry, queue}
+  defp dequeue_while(queue, datetime, {old_price, old_datetime} = old_q_entry) do
+    case :queue.out(queue) do
+      {{:value, q_entry}, queue} ->
+        {_q_price, q_datetime} = q_entry 
+        seconds_diff = DateTime.diff(datetime, q_datetime)
+        if seconds_diff >= @trade_delta_sec do
+          dequeue_while(queue, datetime, {old_price, old_datetime})
+        else
+          {q_entry, queue}
+        end
+      {:empty, queue} -> {old_q_entry, queue}
+    end
   end
 
   defp get_next_state_and_action(pricef, state, %{oracle_ref: {old_price, _old_datetime}} = data) do

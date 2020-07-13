@@ -17,7 +17,10 @@ defmodule CfBot.Application do
       #      },
       {DynamicSupervisor, strategy: :one_for_one, name: CfBot.DynSup},
       {DynamicSupervisor, strategy: :one_for_one, name: CfBot.WsSup},
-      {CfCb.WsClient, [["BTC-USD"], &CfBot.Statem.oracle_update/2, [CfCb, CfLuno, CfValr, CfLunoEth]]}
+      %{id: CfCbWsClientBtc, start: {CfCb.WsClient, :start_link, [["BTC-USD"], &CfBot.Statem.oracle_update/2, [CfCb, CfLuno, CfValr]]}},
+      %{id: CfCbWsClientEth, start: {CfCb.WsClient, :start_link, [["ETH-USD"], &CfBot.Statem.oracle_update/2, [CfLunoEth]]}}
+      #{CfCb.WsClient, [["BTC-USD"], &CfBot.Statem.oracle_update/2, [CfCb, CfLuno, CfValr]]},
+      #{CfCb.WsClient, [["ETH-USD"], &CfBot.Statem.oracle_update/2, [CfLunoEth]]}
     ]
 
     opts = [strategy: :one_for_one, name: CfBot.Supervisor]

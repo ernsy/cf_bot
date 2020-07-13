@@ -4,7 +4,7 @@ defmodule CfCb.WsClient do
 
   @url "wss://ws-feed.pro.coinbase.com"
 
-  def start_link([products, cb_fun, cb_names]) do
+  def start_link(products, cb_fun, cb_names) do
     {:ok, pid} = WebSockex.start_link(@url, __MODULE__, %{products: products, cb_fun: cb_fun, cb_names: cb_names})
     subscribe(pid, products)
     {:ok, pid}
