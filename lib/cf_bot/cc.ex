@@ -66,9 +66,60 @@ defmodule CfBot.CC do
           min_incr: 1,
           long_review_time: 3000,
           short_review_time: 1000,
-          dt_pct: 0.001,
+          dt_pct: 0.0015,
           ut_pct: 0.0015,
-          bv_pct: 0.25,
+          bv_pct: 0.125,
+          stable_pct: 0.000375,
+          prim_hodl_amt: hodl_amt,
+          mode: mode,
+          ws: false
+        }
+      }
+    )
+    CfBot.Statem.set_mode(CfLunoEth, "sell")
+  end
+    def start_luno_eth(hodl_amt, mode, t_pct, bv_pct) do
+    DynamicSupervisor.start_child(
+      CfBot.DynSup,
+      {
+        CfBot.Statem,
+        %{
+          name: CfLunoEth,
+          med_mod: CfLuno.Mediate,
+          pair: "ETHZAR",
+          ref_pair: "ETH-USD",
+          min_incr: 1,
+          long_review_time: 3000,
+          short_review_time: 1000,
+          dt_pct: t_pct,
+          ut_pct: t_pct,
+          bv_pct: bv_pct,
+          stable_pct: 0.000375,
+          prim_hodl_amt: hodl_amt,
+          mode: mode,
+          ws: false
+        }
+      }
+    )
+    CfBot.Statem.set_mode(CfLunoEth, "sell")
+  end
+
+  def start_luno_ltc(hodl_amt, mode) do
+    DynamicSupervisor.start_child(
+      CfBot.DynSup,
+      {
+        CfBot.Statem,
+        %{
+          name: CfLunoLtc,
+          med_mod: CfLuno.Mediate,
+          pair: "LTCZAR",
+          ref_pair: "LTC-USD",
+          min_incr: 1,
+          long_review_time: 3000,
+          short_review_time: 1000,
+          dt_pct: 0.0015,
+          ut_pct: 0.0015,
+          bv_pct: 0.125,
           stable_pct: 0.000375,
           prim_hodl_amt: hodl_amt,
           mode: mode,
