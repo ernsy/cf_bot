@@ -16,7 +16,7 @@ defmodule CfLuno.Mediate do
   end
 
   def get_maker_fee() do
-    0.0
+    0.001
   end
 
   def get_orderbook(pair) do
@@ -33,6 +33,30 @@ defmodule CfLuno.Mediate do
     new_order_id
   end
 
+  def market_order(pair, type, volume) do
+    vol_str = :erlang.float_to_binary(volume, [{:decimals, 6}])
+    Logger.info("Place market #{type} for #{vol_str}")
+    params0 = [pair: pair, type: type]
+    {:ok, %{"order_id" => new_order_id}} = if type == "BUY" do
+      {ask_price, _} = get_ticker(pair)["ask"]
+                       |> Float.parse()
+      counter_vol = ask_price * volume
+                    |> :erlang.float_to_binary([{:decimals, 6}])
+      Logger.info("Place market #{type} for #{vol_str} at #{ask_price}")
+      JsonUtils.retry_req(&CfLuno.Api.market_order/1, [params0 ++ [counter_volume: counter_vol]])
+    else
+      result = JsonUtils.retry_req(&CfLuno.Api.market_order/1, [params0 ++ [base_volume: vol_str]])
+      {bid_price, _} = get_ticker(pair)["bid"]
+                       |> Float.parse()
+      Logger.info("Place market #{type} for #{vol_str} at #{bid_price}")
+      result
+    end
+    new_order_id
+  end
+
+  def stop_order(nil, _price) do
+    :ok
+  end
   def stop_order(order_id, price) do
     Logger.info("Cancel limit order #{order_id} at #{price}")
     JsonUtils.retry_req(&CfLuno.Api.stop_order/1, [order_id])

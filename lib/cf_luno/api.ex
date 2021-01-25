@@ -21,6 +21,11 @@ defmodule CfLuno.Api do
     |> invoke_public_api()
   end
 
+  def market_order(params) do
+    "/marketorder?" <> URI.encode_query(params)
+    |> invoke_private_api("POST")
+  end
+
   def post_order(params) do
     "/postorder?" <> URI.encode_query(params)
     |> invoke_private_api("POST")
@@ -46,7 +51,6 @@ defmodule CfLuno.Api do
   #---------------------------------------------------------------------------------------------------------------------
 
   defp invoke_public_api(path) do
-    Logger.debug("Luno public api path: #{inspect path}")
     @luno_uri <> path
     |> HTTPoison.get()
   end
@@ -55,7 +59,6 @@ defmodule CfLuno.Api do
   defp invoke_private_api(path, method) do
     url = @luno_uri <> path
     {:ok, api_key, api_secret} = get_auth_args()
-    Logger.debug("Luno private api path: #{inspect url}")
     case method do
       "GET" ->
         HTTPoison.get(

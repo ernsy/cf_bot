@@ -6,7 +6,7 @@ defmodule CfCb.Api do
   def get_oracle_ticker(product_id) do
     url = "https://api.pro.coinbase.com/products/" <> product_id <> "/ticker"
     Logger.debug("CB public api v1 url: #{inspect url}")
-    HTTPoison.get(url)
+    HTTPoison.get(url, [],[ssl: [{:versions, [:'tlsv1.2']}]])
     |> JsonUtils.decode_json_response()
     #"/products/" <> product_id <> "/ticker"
     #|> invoke_public_api()
