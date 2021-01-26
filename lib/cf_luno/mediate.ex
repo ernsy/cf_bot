@@ -7,10 +7,16 @@ defmodule CfLuno.Mediate do
     ticker
   end
 
-  def get_avail_bal(asset) do
+  def get_avail_bal(asset, cancel_pending \\ false) do
     {:ok, %{"balance" => [%{"balance" => avail_bal, "unconfirmed" => unconf_bal, "reserved" => reserved}]}} =
       JsonUtils.retry_req(&CfLuno.Api.balance/1, [asset])
-    avail_bal = to_float(avail_bal) + to_float(unconf_bal) - to_float(reserved)
+    Logger.debug("Bal avail: #{avail_bal} unconf: #{unconf_bal} reserved: #{reserved}}")
+    avail_bal =
+      if cancel_pending do
+        to_float(avail_bal) + to_float(unconf_bal)
+      else
+        to_float(avail_bal) + to_float(unconf_bal) - to_float(reserved)
+      end
     Logger.info("Available #{asset} balance: #{avail_bal}")
     avail_bal
   end
@@ -29,13 +35,16 @@ defmodule CfLuno.Mediate do
     price_str = trunc(price)
     Logger.info("Place limit #{type} for #{vol_str} at #{price_str}")
     params = [pair: pair, type: type, volume: vol_str, price: price_str, post_only: post_only]
-    {:ok, %{"order_id" => new_order_id}} = JsonUtils.retry_req(&CfLuno.Api.post_order/1, [params])
-    new_order_id
+    case JsonUtils.retry_req(&CfLuno.Api.post_order/1, [params]) do
+      {:ok, %{"order_id" => new_order_id}} -> new_order_id
+      {:error, {409, _}} ->
+        new_price = if type == "ASK", do: price + 1, else: price - 1
+        post_order(pair, type, volume, new_price, post_only)
+    end
   end
 
   def market_order(pair, type, volume) do
     vol_str = :erlang.float_to_binary(volume, [{:decimals, 6}])
-    Logger.info("Place market #{type} for #{vol_str}")
     params0 = [pair: pair, type: type]
     {:ok, %{"order_id" => new_order_id}} = if type == "BUY" do
       {ask_price, _} = get_ticker(pair)["ask"]
@@ -60,7 +69,7 @@ defmodule CfLuno.Mediate do
   def stop_order(order_id, price) do
     Logger.info("Cancel limit order #{order_id} at #{price}")
     JsonUtils.retry_req(&CfLuno.Api.stop_order/1, [order_id])
-    Process.sleep(4000) #wait for balance to update after cancelling order
+    #Process.sleep(4000) #wait for balance to update after cancelling order
   end
 
   def list_open_orders(pair) do
@@ -97,8 +106,8 @@ defmodule CfLuno.Mediate do
     latest_ts = trades
                 |> List.last()
                 |> Map.get("timestamp")
-    vol = %{"ASK" => ask, "BID" => bid, "latest_ts" => latest_ts + 1}
-    Logger.info("Traded vol: #{inspect vol}")
+    vol = %{"ASK" => ask, "BID" => bid, "SELL" => ask, "BUY" => bid, "latest_ts" => latest_ts + 1}
+    Logger.warn("Traded vol: #{inspect vol}")
     vol
   end
 

@@ -66,10 +66,10 @@ defmodule CfBot.CC do
           min_incr: 1,
           long_review_time: 3000,
           short_review_time: 1000,
-          dt_pct: 0.005,
-          ut_pct: 0.005,
+          dt_pct: 0.0045,
+          ut_pct: 0.0045,
           bv_pct: 1,
-          stable_pct: 0.001,
+          stable_pct: 0.0001,
           sell_amt: s_amt,
           buy_amt: b_amt,
           prim_hodl_amt: p_hodl,
@@ -79,7 +79,6 @@ defmodule CfBot.CC do
         }
       }
     )
-    CfBot.Statem.set_mode(CfLuno, "bot")
   end
 
   def start_luno_eth(hodl_amt, mode) do
@@ -175,7 +174,7 @@ defmodule CfBot.CC do
           dt_pct: 0.0015,
           ut_pct: 0.0015,
           bv_pct: 1,
-          stable_pct: 0.000125,
+          stable_pct: 0.00025,
           prim_hodl_amt: hodl_amt,
           mode: mode,
           ws: true

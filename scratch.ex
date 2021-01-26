@@ -1,10 +1,58 @@
-DynamicSupervisor.start_child(CfBot.DynSup,{CfBot.Statem,%{name: CfLuno, med_mod: CfLuno.TestMed, pair: "XBTZAR", ref_pair: "BTC-USD", min_incr: 1, review_time: 2000, dt_pct: 0.002, ut_pct: 0.002, stable_pct: 0.0005}})
-DynamicSupervisor.start_child(CfBot.DynSup,{CfBot.Statem, %{name: CfCb, med_mod: CfCb.TestMed, pair: "BTC-GBP", ref_pair: "BTC-USD", min_incr: 0.01, review_time: 50, dt_pct: 0.0005, ut_pct: 0.0005, stable_pct: 0.0001}})
-DynamicSupervisor.start_child(CfBot.DynSup,{CfBot.Statem, %{name: CfCb, med_mod: CfCb.Mediate, pair: "BTC-USD", ref_pair: "BTC-USD", min_incr: 0.01, review_time: 50, dt_pct: 0.0005, ut_pct: 0.0005, stable_pct: 0.0001}})
+DynamicSupervisor.start_child(
+  CfBot.DynSup,
+  {
+    CfBot.Statem,
+    %{
+      name: CfLuno,
+      med_mod: CfLuno.TestMed,
+      pair: "XBTZAR",
+      ref_pair: "BTC-USD",
+      min_incr: 1,
+      review_time: 2000,
+      dt_pct: 0.002,
+      ut_pct: 0.002,
+      stable_pct: 0.0005
+    }
+  }
+)
+DynamicSupervisor.start_child(
+  CfBot.DynSup,
+  {
+    CfBot.Statem,
+    %{
+      name: CfCb,
+      med_mod: CfCb.TestMed,
+      pair: "BTC-GBP",
+      ref_pair: "BTC-USD",
+      min_incr: 0.01,
+      review_time: 50,
+      dt_pct: 0.0005,
+      ut_pct: 0.0005,
+      stable_pct: 0.0001
+    }
+  }
+)
+DynamicSupervisor.start_child(
+  CfBot.DynSup,
+  {
+    CfBot.Statem,
+    %{
+      name: CfCb,
+      med_mod: CfCb.Mediate,
+      pair: "BTC-USD",
+      ref_pair: "BTC-USD",
+      min_incr: 0.01,
+      review_time: 50,
+      dt_pct: 0.0005,
+      ut_pct: 0.0005,
+      stable_pct: 0.0001
+    }
+  }
+)
 
-CfBot.CC.start_cb(CfCb.Mediate.get_avail_bal("GBP")/3*2, "buy")
+CfBot.CC.start_cb(CfCb.Mediate.get_avail_bal("GBP") / 3 * 2, "buy")
 CfBot.Statem.set_mode(CfCb, "buy")
-CfBot.Statem.set_hodl_amt(CfCb, "secondary", CfCb.Mediate.get_avail_bal("GBP")/2)
+CfBot.Statem.set_hodl_amt(CfCb, "secondary", CfCb.Mediate.get_avail_bal("GBP") / 2)
 CfBot.Statem.set_hodl_amt(CfCb, "secondary", 0)
 
 CfBot.CC.start_luno(0.05064741562, "hodl")
@@ -13,6 +61,9 @@ CfBot.Statem.set_hodl_amt(CfLuno, "primary", 0.4598463976)
 CfBot.Statem.set_hodl_amt(CfLuno, "primary", CfLuno.Mediate.get_avail_bal("XBT") - 0.26189576)
 CfBot.Statem.set_sell_amt(CfLuno, 0.1195040383)
 CfBot.Statem.resume(CfLuno)
+
+CfBot.CC.start_luno_bot(0.0005, 0.0005, 0.0259, 0, "bot")
+CfBot.Statem.set_mode(CfLuno, "bot")
 
 CfBot.CC.start_luno_eth(3.5, "hodl")
 CfBot.Statem.set_mode(CfLunoEth, "sell")
@@ -44,26 +95,26 @@ c("lib/cf_bot/transitions.ex")
 c("lib/json_utils.ex")
 
 DynamicSupervisor.start_child(
-      CfBot.DynSup,
-      {
-        CfBot.Statem,
-        %{
-          name: CfLuno,
-          med_mod: CfLuno.Mediate,
-          pair: "ETHXBT",
-          ref_pair: "ETH-BTC",
-          min_incr: 1,
-          long_review_time: 3000,
-          short_review_time: 1000,
-          dt_pct: 0.0015,
-          ut_pct: 0.0015,
-          stable_pct: 0.000375,
-          prim_hodl_amt: 0,
-          mode: "sell",
-          ws: false
-        }
-      }
-    )
+  CfBot.DynSup,
+  {
+    CfBot.Statem,
+    %{
+      name: CfLuno,
+      med_mod: CfLuno.Mediate,
+      pair: "ETHXBT",
+      ref_pair: "ETH-BTC",
+      min_incr: 1,
+      long_review_time: 3000,
+      short_review_time: 1000,
+      dt_pct: 0.0015,
+      ut_pct: 0.0015,
+      stable_pct: 0.000375,
+      prim_hodl_amt: 0,
+      mode: "sell",
+      ws: false
+    }
+  }
+)
 CfBot.Statem.set_mode(CfLuno, "sell")
 
 32NRrfpzCtAiTZRZJwhLtCeScu4Sapzodq
