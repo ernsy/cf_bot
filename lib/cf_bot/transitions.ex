@@ -70,27 +70,27 @@ defmodule CfBot.Transitions do
     %{
       buy_or_sell:
       %{
-        stable: {:sell, @limit_sell_action},
-        up_trend: {:quick_buy, @market_buy_action},
-        down_trend: {:quick_sell, @market_sell_action},
-        positive: {:sell, @limit_sell_action},
-        negative: {:quick_sell, @limit_sell_action}
+        stable: {:buy, @limit_buy_action},
+        up_trend: {:buy, @market_buy_action},
+        down_trend: {:sell, @market_sell_action},
+        positive: {:buy, @limit_buy_action},
+        negative: {:sell, @limit_sell_action}
       },
       sell:
       %{
         stable: {:sell, @limit_sell_action},
         up_trend: {:wait_stable, @cancel_order_action},
-        down_trend: {:quick_sell, @market_sell_action},
-        positive: {:sell, @limit_sell_action},
-        negative: {:quick_sell, @limit_sell_action}
+        down_trend: {:sell, @market_sell_action},
+        positive: {:wait_stable, @cancel_order_action},
+        negative: {:sell, @limit_sell_action}
       },
       buy:
       %{
         stable: {:buy, @limit_buy_action},
-        up_trend: {:quick_buy, @market_buy_action},
+        up_trend: {:buy, @market_buy_action},
         down_trend: {:wait_stable, @cancel_order_action},
         positive: {:buy, @limit_buy_action},
-        negative: {:buy, [{:state_timeout, :cancel}, @cancel_order_action]}
+        negative: {:wait_stable, @cancel_order_action},
       }
     }
   end
@@ -128,27 +128,27 @@ defmodule CfBot.Transitions do
     %{
       buy_or_sell:
       %{
-        stable: {:buy, @limit_buy_action},
-        up_trend: {:quick_buy, @market_buy_action},
-        down_trend: {:quick_sell, @market_sell_action},
-        positive: {:quick_buy, @limit_buy_action},
-        negative: {:buy, @limit_buy_action}
+        stable: {:sell, @limit_sell_action},
+        up_trend: {:buy, @market_buy_action},
+        down_trend: {:sell, @market_sell_action},
+        positive: {:buy, @limit_buy_action},
+        negative: {:sell, @limit_sell_action}
       },
       sell:
       %{
         stable: {:sell, @limit_sell_action},
         up_trend: {:wait_stable, @cancel_order_action},
-        down_trend: {:quick_sell, @market_sell_action},
-        positive: {:sell, [{:state_timeout, :cancel}, @cancel_order_action]},
+        down_trend: {:sell, @market_sell_action},
+        positive: {:wait_stable, @cancel_order_action},
         negative: {:sell, @limit_sell_action}
       },
       buy:
       %{
         stable: {:buy, @limit_buy_action},
-        up_trend: {:quick_buy, @market_buy_action},
+        up_trend: {:buy, @market_buy_action},
         down_trend: {:wait_stable, @cancel_order_action},
         positive: {:buy, @limit_buy_action},
-        negative: {:buy, @limit_buy_action}
+        negative: {:wait_stable, @cancel_order_action}
       }
     }
   end

@@ -7,12 +7,12 @@ defmodule CfLuno.Mediate do
     ticker
   end
 
-  def get_avail_bal(asset, cancel_pending \\ false) do
+  def get_avail_bal(asset, balance_reserved \\ false) do
     {:ok, %{"balance" => [%{"balance" => avail_bal, "unconfirmed" => unconf_bal, "reserved" => reserved}]}} =
       JsonUtils.retry_req(&CfLuno.Api.balance/1, [asset])
     Logger.debug("Bal avail: #{avail_bal} unconf: #{unconf_bal} reserved: #{reserved}}")
     avail_bal =
-      if cancel_pending do
+      if balance_reserved do
         to_float(avail_bal) + to_float(unconf_bal)
       else
         to_float(avail_bal) + to_float(unconf_bal) - to_float(reserved)

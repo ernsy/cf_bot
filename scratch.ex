@@ -62,7 +62,7 @@ CfBot.Statem.set_hodl_amt(CfLuno, "primary", CfLuno.Mediate.get_avail_bal("XBT")
 CfBot.Statem.set_sell_amt(CfLuno, 0.1195040383)
 CfBot.Statem.resume(CfLuno)
 
-CfBot.CC.start_luno_bot(0.0005, 0.0005, 0.0259, 0, "bot")
+CfBot.CC.start_luno_bot(0.002, 0.00, 0.0225, 1000, "bot")
 CfBot.Statem.set_mode(CfLuno, "bot")
 
 CfBot.CC.start_luno_eth(3.5, "hodl")
