@@ -47,8 +47,9 @@ defmodule CfLuno.Mediate do
 
   def market_order(pair, type, volume) do
     vol_str = :erlang.float_to_binary(volume, [{:decimals, 6}])
+    type = if type ==  "BID", do: "BUY", else: "ASK"
     params0 = [pair: pair, type: type]
-    {:ok, %{"order_id" => new_order_id}} = if type == "BUY" do
+    if type == "BUY" do
       {ask_price, _} = get_ticker(pair)["ask"]
                        |> Float.parse()
       counter_vol = ask_price * volume
@@ -62,7 +63,6 @@ defmodule CfLuno.Mediate do
       Logger.info("Place market #{type} for #{vol_str} at #{bid_price}")
       result
     end
-    new_order_id
   end
 
   def stop_order(nil) do
@@ -80,7 +80,7 @@ defmodule CfLuno.Mediate do
       orders,
       fn (%{"order_id" => id, "limit_price" => price, "creation_timestamp" => ts}) ->
         {pricef, _} = Float.parse(price)
-        %{order_id: id, order_price: pricef, order_time: ts}
+        %{order_id: id, old_price: pricef, order_time: ts}
       end
     )
   end
@@ -108,7 +108,7 @@ defmodule CfLuno.Mediate do
     latest_ts = trades
                 |> List.last()
                 |> Map.get("timestamp")
-    vol = %{"ASK" => ask, "BID" => bid, "SELL" => ask, "BUY" => bid, "latest_ts" => latest_ts + 1}
+    vol = %{"ASK" => ask, "BID" => bid, "latest_ts" => latest_ts + 1}
     Logger.warn("Traded vol: #{inspect vol}")
     vol
   end

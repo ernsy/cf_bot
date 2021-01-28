@@ -170,16 +170,7 @@ defmodule CfBot.Statem do
     %{sell_amt: sell_amt, buy_amt: buy_amt, med_mod: mod, pair: pair, ws: ws} = data
     orders = mod.list_open_orders(pair)
     %{} = cancel_orders(orders, mod)
-    trades = mod.sum_trades(pair, order_ts, order_id, ws)
-    vol_sold = trades["ASK"]
-    vol_bought = trades["BID"]
-    [new_sell_amt, new_buy_amt] =
-      if mode == "bot" do
-        [sell_amt - vol_sold + vol_bought, buy_amt - vol_bought + vol_sold]
-      else
-        [sell_amt - vol_sold, buy_amt - vol_bought]
-      end
-    new_ts = trades["latest_ts"] || order_ts
+    [new_ts,new_sell_amt,new_buy_amt] = calc_vol(data, sell_amt, buy_amt, "ASK", "BID")
     new_data =
       %{data | order_id: nil, old_price: 0, sell_amt: new_sell_amt, buy_amt: new_buy_amt, order_time: new_ts}
     {:keep_state, new_data}
@@ -381,8 +372,6 @@ defmodule CfBot.Statem do
   defp get_state_order_type(state) when state == :sell or state == :quick_sell, do: "ASK"
   defp get_state_order_type(state) when state == :buy or state == :quick_buy, do: "BID"
 
-
-
   defp calc_best_price(ask_price, ask_price, bid_price, min_incr, "ASK") do
     max(bid_price + min_incr, ask_price - min_incr)
   end
@@ -435,10 +424,8 @@ defmodule CfBot.Statem do
     bal_after_order = get_bal_after_order(data, type, rem_vol, bal_reserved?)
     if bal_after_order >= hodl_amt and rem_vol >= @min_order_vol do
       med_mod.market_order(pair, type, rem_vol)
-      %{data | :next_transition => {:wait_stable, []}}
-    else
-      %{data | :next_transition => {:wait_stable, []}}
     end
+    %{data | :order_id => nil, :next_transition => {:wait_stable, []}}
   end
 
   def do_common_order_tasks(%{order_id: order_id} = data, state) do

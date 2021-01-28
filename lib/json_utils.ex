@@ -2,7 +2,7 @@ defmodule JsonUtils do
   require Logger
 
   @sleep_time 1000
-  @retry_count 5
+  @retry_count 3
 
   def retry_req(req_fun, params, back_off_time \\ nil, retry_count \\ @retry_count)
   def retry_req(req_fun, params, _back_off_time, 1) do
