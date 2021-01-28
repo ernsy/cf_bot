@@ -33,13 +33,15 @@ defmodule CfLuno.Mediate do
   def post_order(pair, type, volume, price, post_only) do
     vol_str = :erlang.float_to_binary(volume, [{:decimals, 6}])
     price_str = trunc(price)
-    Logger.info("Place limit #{type} for #{vol_str} at #{price_str}")
     params = [pair: pair, type: type, volume: vol_str, price: price_str, post_only: post_only]
     case JsonUtils.retry_req(&CfLuno.Api.post_order/1, [params]) do
-      {:ok, %{"order_id" => new_order_id}} -> new_order_id
+      {:ok, %{"order_id" => new_order_id}} ->
+        Logger.info("Placed limit #{type} with id #{new_order_id} for #{vol_str} at #{price_str}")
+        new_order_id
       {:error, {409, _}} ->
         new_price = if type == "ASK", do: price + 1, else: price - 1
         post_order(pair, type, volume, new_price, post_only)
+      _ -> nil
     end
   end
 
@@ -63,11 +65,11 @@ defmodule CfLuno.Mediate do
     new_order_id
   end
 
-  def stop_order(nil, _price) do
+  def stop_order(nil) do
     :ok
   end
-  def stop_order(order_id, price) do
-    Logger.info("Cancel limit order #{order_id} at #{price}")
+  def stop_order(order_id) do
+    Logger.info("Cancel limit order #{order_id}")
     JsonUtils.retry_req(&CfLuno.Api.stop_order/1, [order_id])
     #Process.sleep(4000) #wait for balance to update after cancelling order
   end
