@@ -1,8 +1,8 @@
 defmodule JsonUtils do
   require Logger
 
-  @sleep_time 1000
-  @retry_count 3
+  @sleep_time 200
+  @retry_count 6
 
   def retry_req(req_fun, params, back_off_time \\ nil, retry_count \\ @retry_count)
   def retry_req(req_fun, params, _back_off_time, 1) do
@@ -34,6 +34,10 @@ defmodule JsonUtils do
       when code == 200 or code == 202 do
     body = if String.length(json_body) > 0, do: Jason.decode!(json_body), else: json_body
     {:ok, body}
+  end
+  def decode_json_response({:ok, %HTTPoison.Response{status_code: code, body: body}}) when code == 429 or code == 404 do
+    Logger.debug("Response: #{code}, #{inspect body}}")
+    {:error, {code, body}}
   end
   def decode_json_response({:ok, %HTTPoison.Response{status_code: status_code, body: body}}) do
     Logger.warn("Response: {#{inspect status_code}, #{inspect body}}")

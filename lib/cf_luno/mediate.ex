@@ -17,7 +17,7 @@ defmodule CfLuno.Mediate do
       else
         to_float(avail_bal) + to_float(unconf_bal) - to_float(reserved)
       end
-    Logger.info("Available #{asset} balance: #{avail_bal}")
+    Logger.debug("Available #{asset} balance: #{avail_bal}")
     avail_bal
   end
 
@@ -36,11 +36,8 @@ defmodule CfLuno.Mediate do
     params = [pair: pair, type: type, volume: vol_str, price: price_str, post_only: post_only]
     case JsonUtils.retry_req(&CfLuno.Api.post_order/1, [params]) do
       {:ok, %{"order_id" => new_order_id}} ->
-        Logger.info("Placed limit #{type} with id #{new_order_id} for #{vol_str} at #{price_str}")
+        Logger.debug("Placed limit #{type} with id #{new_order_id} for #{vol_str} at #{price_str}")
         new_order_id
-      {:error, {409, _}} ->
-        new_price = if type == "ASK", do: price + 1, else: price - 1
-        post_order(pair, type, volume, new_price, post_only)
       _ -> nil
     end
   end
@@ -69,7 +66,7 @@ defmodule CfLuno.Mediate do
     :ok
   end
   def stop_order(order_id) do
-    Logger.info("Cancel limit order #{order_id}")
+    Logger.debug("Cancel limit order #{order_id}")
     JsonUtils.retry_req(&CfLuno.Api.stop_order/1, [order_id])
     #Process.sleep(4000) #wait for balance to update after cancelling order
   end
@@ -97,19 +94,24 @@ defmodule CfLuno.Mediate do
 
   defp get_traded_volume(nil), do: %{"ASK" => 0, "BID" => 0}
   defp get_traded_volume(trades) do
-    [ask, bid] = Enum.reduce(
+    [ask, bid, last_price] = Enum.reduce(
       trades,
-      [0, 0],
+      [0, 0, 0],
       fn
-        (%{"type" => "ASK", "volume" => volume}, [vol_ask, vol_bid]) -> [vol_ask + to_float(volume), vol_bid]
-        (%{"type" => "BID", "volume" => volume}, [vol_ask, vol_bid]) -> [vol_ask, vol_bid + to_float(volume)]
+        (%{"type" => "ASK", "volume" => volume, "price" => price}, [vol_ask, vol_bid, _last_price]) -> [vol_ask + to_float(volume), vol_bid, price]
+        (%{"type" => "BID", "volume" => volume, "price" => price}, [vol_ask, vol_bid, _last_price]) -> [vol_ask, vol_bid + to_float(volume), price]
       end
     )
     latest_ts = trades
                 |> List.last()
                 |> Map.get("timestamp")
-    vol = %{"ASK" => ask, "BID" => bid, "latest_ts" => latest_ts + 1}
-    Logger.warn("Traded vol: #{inspect vol}")
+    vol = %{"ASK" => ask, "BID" => bid, "latest_ts" => latest_ts + 1, "last_order_price" => last_price}
+    cond do
+      ask > 0 and bid > 0 -> Logger.notice("Traded vol: #{inspect vol}")
+      ask > 0 ->  Logger.notice("Sold #{ask} at lowest #{last_price}")
+      bid > 0 -> Logger.notice("Bought #{bid} at highest #{last_price}")
+      true -> :ok
+    end
     vol
   end
 
