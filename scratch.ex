@@ -1,8 +1,18 @@
-sell_amt = 0.01; buy_amt = 0; CfBot.CC.start_luno_bot(sell_amt, buy_amt,  CfLuno.Mediate.get_avail_bal("XBT") - sell_amt - 0.0005, 0, "bot")
+sell_amt= CfLuno.Mediate.get_avail_bal("XBT") - 0.000022*100; buy_amt = 0.00; CfBot.CC.start_luno_bot(sell_amt, buy_amt,  CfLuno.Mediate.get_avail_bal("XBT") - sell_amt - 0.0005, 0, "bot")
+    {price, _} = CfLuno.Mediate.get_ticker("XBTZAR")["last_trade"] |> Float.parse()
+    buy_amt = (CfLuno.Mediate.get_avail_bal("ZAR") - 500) / price
+    fee_allowance =  (CfLuno.Mediate.get_avail_bal("XBT") + buy_amt) * fee * 100
 CfBot.Statem.set_data(CfLuno, :mode, "bot")
 CfBot.Statem.set_data(CfLuno,:bv_pct,0.5)
-CfBot.Statem.set_data(CfLuno,:ut_pct,0.0035)
-CfBot.Statem.set_data(CfLuno,:dt_pct,0.0035)
+CfBot.Statem.set_data(CfLuno,:ut_pct,0.3/100)
+CfBot.Statem.set_data(CfLuno,:dt_pct,0.3/100)
+CfBot.Statem.set_data(CfLuno,:stable_pct,0.01/100)
+CfBot.Statem.set_data(CfLuno,:prim_hodl_amt,0)
+
+c("lib/cf_luno/mediate.ex")
+c("lib/cf_bot/statem.ex")
+c("lib/cf_bot/transitions.ex")
+c("lib/json_utils.ex")
 
 CfBot.CC.start_cb(CfCb.Mediate.get_avail_bal("GBP") / 3 * 2, "buy")
 CfBot.Statem.set_mode(CfCb, "buy")

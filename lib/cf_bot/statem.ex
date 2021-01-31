@@ -4,7 +4,7 @@ defmodule CfBot.Statem do
   use GenStateMachine
 
   @min_order_vol 0.0005
-  @trade_delta_sec 60
+  @trade_delta_sec 30
   @long_review_time 1
   @short_review_time 1
 
@@ -238,7 +238,7 @@ defmodule CfBot.Statem do
     {:next_state, state, data}
   end
   defp do_state_change(_pricef, _state, next_state, next_action, data) do
-    Logger.debug("State change:#{next_state}")
+    Logger.info("State change:#{next_state}")
     new_buy_amt = get_mode_buy_amt(data)
     new_sell_amt = get_mode_sell_amt(data)
     {:next_state, next_state, %{data | buy_amt: new_buy_amt, sell_amt: new_sell_amt}, next_action}
@@ -399,7 +399,7 @@ defmodule CfBot.Statem do
         :next_transition => {state, {:state_timeout, @long_review_time, action}},
       }
     else
-      Logger.debug("Volume below minimum, next state: #{:wait_stable}")
+      Logger.info("Volume below minimum, next state: #{:wait_stable}")
       %{data | :order_id => nil, :next_transition => {:wait_stable, []}}
     end
   end
@@ -431,7 +431,7 @@ defmodule CfBot.Statem do
     end
   end
 
-  def do_calc_vol(%{order_id: order_id} = data, state) do
+  def do_calc_vol(%{order_id: order_id,order_time: old_ts} = data, state) do
     [vol_key, alt_vol_key, hodl_amt_key] = get_state_keys(state)
     [order_vol, alt_vol, type, alt_type, hodl_amt] = get_state_values(
       data,
@@ -440,8 +440,13 @@ defmodule CfBot.Statem do
       alt_vol_key,
       hodl_amt_key
     )
-    [ts, rem_vol, alt_vol] = calc_vol(data, order_vol, alt_vol, type, alt_type)
-    [rem_vol, order_id] = if rem_vol < 1.0e-06, do: [0, nil], else: [rem_vol, order_id]
+    [ts, rem_vol, alt_vol] =
+    if order_vol> @min_order_vol do
+      [ts, rem_vol, alt_vol] = calc_vol(data, order_vol, alt_vol, type, alt_type)
+      else
+      [old_ts, order_vol, alt_vol]
+    end
+    [rem_vol, order_id] = if rem_vol < 1.0e-05, do: [0, nil], else: [rem_vol, order_id]
     [
       %{data | vol_key => rem_vol, alt_vol_key => alt_vol, :order_id => order_id, :order_time => ts},
       rem_vol,
