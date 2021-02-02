@@ -70,7 +70,7 @@ defmodule CfBot.Transitions do
     %{
       buy_or_sell:
       %{
-        stable: {:buy, @limit_buy_action},
+        stable: {:sell, @limit_sell_action},
         up_trend: {:buy, @market_buy_action},
         down_trend: {:sell, @market_sell_action},
         positive: {:quick_buy, @limit_buy_action},
@@ -128,7 +128,7 @@ defmodule CfBot.Transitions do
     %{
       buy_or_sell:
       %{
-        stable: {:sell, @limit_sell_action},
+        stable: {:buy, @limit_buy_action},
         up_trend: {:buy, @market_buy_action},
         down_trend: {:sell, @market_sell_action},
         positive: {:quick_buy, @limit_buy_action},

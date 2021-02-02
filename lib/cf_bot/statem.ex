@@ -36,7 +36,7 @@ defmodule CfBot.Statem do
   # callbacks
   #---------------------------------------------------------------------------------------------------------------------
 
-  def init(%{min_incr: _, dt_pct: _, ut_pct: _, stable_pct: _, bv_pct: _, } = init_map) do
+  def init(%{min_incr: _, dt_pct: _, ut_pct: _, stable_pct: _, bv_pct: _, j_pct: _, aj_pct: _} = init_map) do
     %{name: name, med_mod: med_mod, pair: pair, ref_pair: ref_pair, ws: ws, mode: mode} = init_map
     %{sell_amt: sell_amt, buy_amt: buy_amt} = init_map
     ws_mod = Module.concat([name, WsUserClient])
@@ -124,7 +124,7 @@ defmodule CfBot.Statem do
     if seconds_diff > @trade_delta_sec do
       queue = :queue.in({pricef, datetime}, queue)
       {{q_price, q_datetime}, queue} = dequeue_while(queue, datetime, {old_price, old_datetime})
-      {next_state, next_action} = get_next_state_and_action(pricef, state, data)
+      {next_state, next_action} = get_next_state_and_action(data, state, pricef)
       new_data = %{data | oracle_queue: {queue, length}, oracle_ref: {q_price, q_datetime}}
       do_state_change(pricef, state, next_state, next_action, new_data)
     else
@@ -206,25 +206,35 @@ defmodule CfBot.Statem do
     end
   end
 
-  defp get_next_state_and_action(pricef, state, %{oracle_ref: {old_price, _old_datetime}} = data) do
-    %{sell_amt: sell_amt, buy_amt: buy_amt, dt_pct: dt_pct, ut_pct: ut_pct, stable_pct: s_pct, mode: mode} = data
+  defp get_next_state_and_action(data, state, curr_price) do
+    %{sell_amt: sell_amt, buy_amt: buy_amt, mode: mode} = data
     transitions = apply(CfBot.Transitions, state, [])
     cond do
       sell_amt > 0 and buy_amt > 0 ->
-        check_delta(old_price, pricef, dt_pct, ut_pct, s_pct, transitions[:buy_or_sell])
+        check_delta(data, state, curr_price, transitions[:buy_or_sell])
       sell_amt > 0 or mode == "sell" or mode == "hodl" ->
-        check_delta(old_price, pricef, dt_pct, ut_pct, s_pct, transitions[:sell])
+        check_delta(data, state, curr_price, transitions[:sell])
       buy_amt > 0 or mode == "buy" ->
-        check_delta(old_price, pricef, dt_pct, ut_pct, s_pct, transitions[:buy])
+        check_delta(data, state, curr_price, transitions[:buy])
       true ->
         {state, []}
     end
   end
 
-  defp check_delta(old_price, curr_price, dt_pct, ut_pct, stable_pct, transitions) do
+  defp check_delta(
+         %{oracle_ref: {old_price, _}, } = data,
+         state,
+         curr_price,
+         transitions
+       ) do
+    %{dt_pct: dt_pct, ut_pct: ut_pct, stable_pct: s_pct, j_pct: j_pct, aj_pct: aj_pct} = data
     delta_pct = (curr_price - old_price) / old_price
     cond do
-      abs(delta_pct) < stable_pct -> transitions.stable
+      state == :wait_stable and abs(delta_pct) <= s_pct -> transitions.stable
+      (state == :quick_buy or state == :buy) and delta_pct >= 0 and delta_pct < j_pct -> transitions.stable
+      (state == :quick_sell or state == :sell) and delta_pct <= 0 and -delta_pct < j_pct -> transitions.stable
+      (state == :quick_buy or state == :buy) and delta_pct <= 0 and -delta_pct < aj_pct -> transitions.stable
+      (state == :quick_sell or state == :sell) and delta_pct >= 0 and delta_pct < aj_pct -> transitions.stable
       delta_pct > ut_pct -> transitions.up_trend
       delta_pct < -dt_pct -> transitions.down_trend
       delta_pct > 0 ->
@@ -414,7 +424,7 @@ defmodule CfBot.Statem do
     new_data =
       if bal_after_order >= hodl_amt and rem_vol >= @min_order_vol do
         med_mod.market_order(pair, type, rem_vol)
-        [new_data, _rem_vol, _hodl_amt, _type] = wait_for_order_conf(data, state)
+        [new_data, _rem_vol, _hodl_amt, _type] = wait_for_order_conf(data, state, 10)
         new_data
       else
         data
@@ -422,16 +432,28 @@ defmodule CfBot.Statem do
     %{new_data | :order_id => nil, :next_transition => {:wait_stable, []}}
   end
 
-  defp wait_for_order_conf(data, state) do
+
+  defp wait_for_order_conf(data, state, 0) do
+    [vol_key, alt_vol_key, hodl_amt_key] = get_state_keys(state)
+    [order_vol, _alt_vol, type, _alt_type, hodl_amt] = get_state_values(
+      data,
+      state,
+      vol_key,
+      alt_vol_key,
+      hodl_amt_key
+    )
+    [data, order_vol, hodl_amt, type]
+  end
+  defp wait_for_order_conf(data, state, count) do
     [data, rem_vol, hodl_amt, type] = do_calc_vol(data, state)
     if rem_vol < @min_order_vol do
       [data, rem_vol, hodl_amt, type]
     else
-      wait_for_order_conf(data, state)
+      wait_for_order_conf(data, state, count - 1)
     end
   end
 
-  def do_calc_vol(%{order_id: order_id,order_time: old_ts} = data, state) do
+  def do_calc_vol(%{order_id: order_id, order_time: old_ts} = data, state) do
     [vol_key, alt_vol_key, hodl_amt_key] = get_state_keys(state)
     [order_vol, alt_vol, type, alt_type, hodl_amt] = get_state_values(
       data,
@@ -441,11 +463,11 @@ defmodule CfBot.Statem do
       hodl_amt_key
     )
     [ts, rem_vol, alt_vol] =
-    if order_vol> @min_order_vol do
-      [ts, rem_vol, alt_vol] = calc_vol(data, order_vol, alt_vol, type, alt_type)
+      if order_vol > @min_order_vol do
+        calc_vol(data, order_vol, alt_vol, type, alt_type)
       else
-      [old_ts, order_vol, alt_vol]
-    end
+        [old_ts, order_vol, alt_vol]
+      end
     [rem_vol, order_id] = if rem_vol < 1.0e-05, do: [0, nil], else: [rem_vol, order_id]
     [
       %{data | vol_key => rem_vol, alt_vol_key => alt_vol, :order_id => order_id, :order_time => ts},

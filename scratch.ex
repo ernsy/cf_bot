@@ -4,9 +4,11 @@ sell_amt= CfLuno.Mediate.get_avail_bal("XBT") - 0.000022*100; buy_amt = 0.00; Cf
     fee_allowance =  (CfLuno.Mediate.get_avail_bal("XBT") + buy_amt) * fee * 100
 CfBot.Statem.set_data(CfLuno, :mode, "bot")
 CfBot.Statem.set_data(CfLuno,:bv_pct,0.5)
-CfBot.Statem.set_data(CfLuno,:ut_pct,0.3/100)
-CfBot.Statem.set_data(CfLuno,:dt_pct,0.3/100)
+CfBot.Statem.set_data(CfLuno,:ut_pct,0.55/100)
+CfBot.Statem.set_data(CfLuno,:dt_pct,0.55/100)
 CfBot.Statem.set_data(CfLuno,:stable_pct,0.01/100)
+CfBot.Statem.set_data(CfLuno,:j_pct,0.01/100)
+CfBot.Statem.set_data(CfLuno,:aj_pct,0.02/100)
 CfBot.Statem.set_data(CfLuno,:prim_hodl_amt,0)
 
 c("lib/cf_luno/mediate.ex")

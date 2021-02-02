@@ -105,7 +105,7 @@ defmodule CfLuno.Mediate do
     latest_ts = trades
                 |> List.last()
                 |> Map.get("timestamp")
-    vol = %{"ASK" => ask, "BID" => bid, "latest_ts" => latest_ts + 1, "last_order_price" => last_price}
+    vol = %{"ASK" => ask, "BID" => bid, "latest_ts" => latest_ts + 2, "last_order_price" => last_price}
     cond do
       ask > 0 and bid > 0 -> Logger.warn("Traded vol: #{inspect vol}")
       ask > 0 ->  Logger.warn("Sold #{ask} at lowest #{last_price}")
