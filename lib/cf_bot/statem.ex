@@ -38,7 +38,6 @@ defmodule CfBot.Statem do
 
   def init(%{min_incr: _, dt_pct: _, ut_pct: _, stable_pct: _, bv_pct: _, j_pct: _, aj_pct: _} = init_map) do
     %{name: name, med_mod: med_mod, pair: pair, ref_pair: ref_pair, ws: ws, mode: mode} = init_map
-    %{sell_amt: sell_amt, buy_amt: buy_amt} = init_map
     ws_mod = Module.concat([name, WsUserClient])
     ws && DynamicSupervisor.start_child(CfBot.WsSup, {ws_mod, [med_mod, pair]})
     prim_curr = String.slice(pair, 0, 3)
@@ -67,7 +66,14 @@ defmodule CfBot.Statem do
     {new_sell_amt, new_buy_amt} =
       cond do
         mode == "hodl" and prim_hodl_amt -> {max(med_mod.get_avail_bal(prim_curr) - prim_hodl_amt, 0), 0}
-        mode == "bot" -> {sell_amt, buy_amt}
+        mode == "bot" ->
+          fee = 0.05 / 100
+          {price, _} = med_mod.get_ticker("XBTZAR")["last_trade"]
+                       |> Float.parse()
+          buy_amt = (med_mod.get_avail_bal("ZAR") - 5000) / price
+          fee_allowance = (med_mod.get_avail_bal("XBT") + buy_amt) * fee * 50
+          sell_amt = med_mod.get_avail_bal("XBT") - fee_allowance
+          {sell_amt, buy_amt}
         true -> {data[:sell_amt], 0}
       end
     init_data = %{
@@ -101,7 +107,7 @@ defmodule CfBot.Statem do
                |> Float.floor(6)
                |> max(0)
     Logger.info("Set :prim_hodl_amt to:#{val} and :sell_amt to :#{sell_amt}, state:#{state}")
-    new_data = %{data | prim_hodl_amt: val, sell_amt: sell_amt, old_amt: sell_amt, order_id: nil}
+    new_data = %{data | prim_hodl_amt: val, sell_amt: sell_amt, old_amt: sell_amt}
     :ok = :dets.insert(name, {:data, new_data})
     Logger.info("New data #{inspect new_data}")
     {:keep_state, new_data}
@@ -134,13 +140,12 @@ defmodule CfBot.Statem do
     end
   end
 
-  def handle_event(event_type, action, state, %{name: name} = data)
+  def handle_event(event_type, action, state, data)
       when
         (event_type == :internal or event_type == :state_timeout) and
         (action == :limit_sell or action == :limit_buy or action == :market_sell or action == :market_buy) do
     new_data = calc_limit_order_price(data, state, action)
                |> post_order(state, action)
-    #:ok = :dets.insert(name, {:data, new_data})
     %{next_transition: {next_state, next_action}} = new_data
     {:next_state, next_state, new_data, next_action}
   end
@@ -148,7 +153,7 @@ defmodule CfBot.Statem do
   def handle_event(:internal, :cancel_orders, _state, data) do
     %{sell_amt: sell_amt, buy_amt: buy_amt, med_mod: mod, pair: pair} = data
     orders = mod.list_open_orders(pair)
-    %{} = cancel_orders(orders, mod)
+    cancel_orders(orders, mod)
     [new_ts, new_sell_amt, new_buy_amt] = calc_vol(data, sell_amt, buy_amt, "ASK", "BID")
     new_data =
       %{data | order_id: nil, old_price: 0, sell_amt: new_sell_amt, buy_amt: new_buy_amt, order_time: new_ts}
@@ -208,14 +213,13 @@ defmodule CfBot.Statem do
 
   defp get_next_state_and_action(data, state, curr_price) do
     %{sell_amt: sell_amt, buy_amt: buy_amt, mode: mode} = data
-    transitions = apply(CfBot.Transitions, state, [])
     cond do
       sell_amt > 0 and buy_amt > 0 ->
-        check_delta(data, state, curr_price, transitions[:buy_or_sell])
+        check_delta(data, state, curr_price, :buy_or_sell)
       sell_amt > 0 or mode == "sell" or mode == "hodl" ->
-        check_delta(data, state, curr_price, transitions[:sell])
+        check_delta(data, state, curr_price, :sell)
       buy_amt > 0 or mode == "buy" ->
-        check_delta(data, state, curr_price, transitions[:buy])
+        check_delta(data, state, curr_price, :buy)
       true ->
         {state, []}
     end
@@ -225,19 +229,24 @@ defmodule CfBot.Statem do
          %{oracle_ref: {old_price, _}, } = data,
          state,
          curr_price,
-         transitions
+         transition_key
        ) do
     %{dt_pct: dt_pct, ut_pct: ut_pct, stable_pct: s_pct, j_pct: j_pct, aj_pct: aj_pct} = data
+    buy_state = state == :quick_buy or state == :buy
+    sell_state = state == :quick_sell or state == :sell
+    state_transitions = apply(CfBot.Transitions, state, [])
+    transitions = state_transitions[transition_key]
     delta_pct = (curr_price - old_price) / old_price
     cond do
-      state == :wait_stable and abs(delta_pct) <= s_pct -> transitions.stable
-      (state == :quick_buy or state == :buy) and delta_pct >= 0 and delta_pct < j_pct -> transitions.stable
-      (state == :quick_sell or state == :sell) and delta_pct <= 0 and -delta_pct < j_pct -> transitions.stable
-      (state == :quick_buy or state == :buy) and delta_pct <= 0 and -delta_pct < aj_pct -> transitions.stable
-      (state == :quick_sell or state == :sell) and delta_pct >= 0 and delta_pct < aj_pct -> transitions.stable
+      state == :wait_stable and transition_key == :buy and delta_pct >= 0 and delta_pct < s_pct -> transitions.stable
+      state == :wait_stable and transition_key == :sell and delta_pct <= 0 and -delta_pct < s_pct -> transitions.stable
+      buy_state and delta_pct >= 0 and delta_pct < j_pct -> transitions.stable
+      sell_state and delta_pct <= 0 and -delta_pct < j_pct -> transitions.stable
+      buy_state and delta_pct <= 0 and -delta_pct < aj_pct -> transitions.stable
+      sell_state and delta_pct >= 0 and delta_pct < aj_pct -> transitions.stable
       delta_pct > ut_pct -> transitions.up_trend
       delta_pct < -dt_pct -> transitions.down_trend
-      delta_pct > 0 ->
+      delta_pct >= 0 ->
         transitions.positive
       delta_pct < 0 ->
         transitions.negative
@@ -399,18 +408,18 @@ defmodule CfBot.Statem do
          action
        ) when action == :limit_sell or action == :limit_buy do
     [data, rem_vol, hodl_amt, type] = do_calc_vol(data, state)
-    bal_reserved? = if rem_vol > 0, do: stop_order(data), else: true
+    {:ok, [old_order_id, bal_reserved?]} = stop_order(data, rem_vol)
     bal_after_order = get_bal_after_order(data, type, rem_vol, bal_reserved?)
     if bal_after_order >= hodl_amt and rem_vol >= @min_order_vol do
       %{
         data |
-        :order_id => med_mod.post_order(pair, type, rem_vol, price, "true"),
+        :order_id => med_mod.post_order(pair, type, rem_vol, price, "true") || old_order_id,
         :old_price => price,
         :next_transition => {state, {:state_timeout, @long_review_time, action}},
       }
     else
       Logger.info("Volume below minimum, next state: #{:wait_stable}")
-      %{data | :order_id => nil, :next_transition => {:wait_stable, []}}
+      %{data | :order_id => old_order_id, :next_transition => {:wait_stable, []}}
     end
   end
   defp post_order(
@@ -419,7 +428,7 @@ defmodule CfBot.Statem do
          action
        ) when action == :market_sell or action == :market_buy do
     [data, rem_vol, hodl_amt, type] = do_calc_vol(data, state)
-    bal_reserved? = if rem_vol > 0, do: stop_order(data), else: true
+    {:ok, [old_order_id, bal_reserved?]} = stop_order(data, rem_vol)
     bal_after_order = get_bal_after_order(data, type, rem_vol, bal_reserved?)
     new_data =
       if bal_after_order >= hodl_amt and rem_vol >= @min_order_vol do
@@ -429,7 +438,7 @@ defmodule CfBot.Statem do
       else
         data
       end
-    %{new_data | :order_id => nil, :next_transition => {:wait_stable, []}}
+    %{new_data | :order_id => old_order_id, :next_transition => {:wait_stable, []}}
   end
 
 
@@ -489,7 +498,7 @@ defmodule CfBot.Statem do
   defp get_return_values(traded_vol, order_vol, alt_traded_vol, alt_vol, mode) do
     rem_vol = if mode == "bot", do: order_vol - traded_vol + alt_traded_vol, else: order_vol - traded_vol
     alt_vol = if mode == "bot", do: alt_vol - alt_traded_vol + traded_vol, else: alt_vol - alt_traded_vol
-    [max(rem_vol, 0), max(alt_vol, 0)]
+    [rem_vol, alt_vol]
   end
 
 
@@ -519,10 +528,12 @@ defmodule CfBot.Statem do
     bal - rem_vol * price
   end
 
-  defp stop_order(%{order_id: order_id, med_mod: med_mod}) do
-    case !is_nil(order_id) && med_mod.stop_order(order_id) do
-      {:error, {404, _}} -> false
-      _ -> true
+  defp stop_order(%{order_id: order_id, med_mod: med_mod}, rem_vol) do
+    if rem_vol > 0
+      do
+      med_mod.stop_order(order_id)
+    else
+      {:ok, [nil, true]}
     end
   end
 
@@ -534,6 +545,5 @@ defmodule CfBot.Statem do
         med_mod.stop_order(id)
       end
     )
-    %{}
   end
 end

@@ -22,7 +22,7 @@ defmodule CfLuno.Mediate do
   end
 
   def get_maker_fee() do
-    0.001
+    0.0003
   end
 
   def get_orderbook(pair) do
@@ -44,7 +44,7 @@ defmodule CfLuno.Mediate do
 
   def market_order(pair, type, volume) do
     vol_str = :erlang.float_to_binary(volume, [{:decimals, 6}])
-    type = if type ==  "BID", do: "BUY", else: "SELL"
+    type = if type == "BID", do: "BUY", else: "SELL"
     params0 = [pair: pair, type: type]
     if type == "BUY" do
       {ask_price, _} = get_ticker(pair)["ask"]
@@ -63,23 +63,28 @@ defmodule CfLuno.Mediate do
   end
 
   def stop_order(nil) do
-    :ok
+  {:ok, [nil, false]}
   end
   def stop_order(order_id) do
     Logger.debug("Cancel limit order #{order_id}")
-    JsonUtils.retry_req(&CfLuno.Api.stop_order/1, [order_id])
-    #Process.sleep(4000) #wait for balance to update after cancelling order
+    case JsonUtils.retry_req(&CfLuno.Api.stop_order/1, [order_id]) do
+      {:ok, %{"success" => true}} -> {:ok, [nil, true]}
+      _ -> {:ok, [order_id, false]}
+    end
   end
 
   def list_open_orders(pair) do
-    {:ok, %{"orders" => orders}} = JsonUtils.retry_req(&CfLuno.Api.list_orders/1, [[pair: pair, state: "PENDING"]])
-    orders && Enum.map(
-      orders,
-      fn (%{"order_id" => id, "limit_price" => price, "creation_timestamp" => ts}) ->
-        {pricef, _} = Float.parse(price)
-        %{order_id: id, old_price: pricef, order_time: ts}
-      end
-    )
+    case JsonUtils.retry_req(&CfLuno.Api.list_orders/1, [[pair: pair, state: "PENDING"]]) do
+      {:ok, %{"orders" => orders}} ->
+        orders && Enum.map(
+          orders,
+          fn (%{"order_id" => id, "limit_price" => price, "creation_timestamp" => ts}) ->
+            {pricef, _} = Float.parse(price)
+            %{order_id: id, old_price: pricef, order_time: ts}
+          end
+        )
+      _ -> %{}
+    end
   end
 
   def sum_trades(_product_id, _since, _, true), do: %{"ASK" => 0, "BID" => 0}
@@ -98,8 +103,10 @@ defmodule CfLuno.Mediate do
       trades,
       [0, 0, 0],
       fn
-        (%{"type" => "ASK", "volume" => volume, "price" => price}, [vol_ask, vol_bid, _last_price]) -> [vol_ask + to_float(volume), vol_bid, price]
-        (%{"type" => "BID", "volume" => volume, "price" => price}, [vol_ask, vol_bid, _last_price]) -> [vol_ask, vol_bid + to_float(volume), price]
+        (%{"type" => "ASK", "volume" => volume, "price" => price}, [vol_ask, vol_bid, _last_price]) ->
+          [vol_ask + to_float(volume), vol_bid, price]
+        (%{"type" => "BID", "volume" => volume, "price" => price}, [vol_ask, vol_bid, _last_price]) ->
+          [vol_ask, vol_bid + to_float(volume), price]
       end
     )
     latest_ts = trades
@@ -108,7 +115,7 @@ defmodule CfLuno.Mediate do
     vol = %{"ASK" => ask, "BID" => bid, "latest_ts" => latest_ts + 2, "last_order_price" => last_price}
     cond do
       ask > 0 and bid > 0 -> Logger.warn("Traded vol: #{inspect vol}")
-      ask > 0 ->  Logger.warn("Sold #{ask} at lowest #{last_price}")
+      ask > 0 -> Logger.warn("Sold #{ask} at lowest #{last_price}")
       bid > 0 -> Logger.warn("Bought #{bid} at highest #{last_price}")
       true -> :ok
     end
