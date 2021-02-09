@@ -35,7 +35,8 @@ defmodule JsonUtils do
     body = if String.length(json_body) > 0, do: Jason.decode!(json_body), else: json_body
     {:ok, body}
   end
-  def decode_json_response({:ok, %HTTPoison.Response{status_code: code, body: body}}) when code == 429 or code == 404 do
+  def decode_json_response({:ok, %HTTPoison.Response{status_code: code, body: body}})
+      when code == 429 or code == 404 or code == 409 do
     Logger.debug("Response: #{code}, #{inspect body}}")
     {:error, {code, body}}
   end

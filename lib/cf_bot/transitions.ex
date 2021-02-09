@@ -12,7 +12,7 @@ defmodule CfBot.Transitions do
     %{
       buy_or_sell:
       %{
-        stable: {:sell, @limit_sell_action},
+        stable: {:wait_stable, []},
         up_trend: {:quick_buy, @market_buy_action},
         down_trend: {:quick_sell, @market_sell_action},
         positive: {:quick_buy, @limit_buy_action},
@@ -20,7 +20,7 @@ defmodule CfBot.Transitions do
       },
       sell:
       %{
-        stable: {:sell, @limit_sell_action},
+        stable: {:wait_stable, []},
         up_trend: {:wait_stable, []},
         down_trend: {:quick_sell, @market_sell_action},
         positive: {:wait_stable, []},
@@ -28,7 +28,7 @@ defmodule CfBot.Transitions do
       },
       buy:
       %{
-        stable: {:buy, @limit_buy_action},
+        stable: {:wait_stable, []},
         up_trend: {:quick_buy, @market_buy_action},
         down_trend: {:wait_stable, []},
         positive: {:quick_buy, @limit_buy_action},
@@ -44,7 +44,7 @@ defmodule CfBot.Transitions do
         stable: {:sell, @limit_sell_action},
         up_trend: {:quick_buy, @market_buy_action},
         down_trend: {:quick_sell, @market_sell_action},
-        positive: {:quick_buy, @limit_buy_action},
+        positive: {:quick_buy, [@cancel_order_action, @limit_buy_action]},
         negative: {:quick_sell, @limit_sell_action}
       },
       sell:
@@ -73,7 +73,7 @@ defmodule CfBot.Transitions do
         stable: {:sell, @limit_sell_action},
         up_trend: {:buy, @market_buy_action},
         down_trend: {:sell, @market_sell_action},
-        positive: {:quick_buy, @limit_buy_action},
+        positive: {:quick_buy, [@cancel_order_action, @limit_buy_action]},
         negative: {:quick_sell, @limit_sell_action}
       },
       sell:
@@ -103,7 +103,7 @@ defmodule CfBot.Transitions do
         up_trend: {:quick_buy, @market_buy_action},
         down_trend: {:quick_sell, @market_sell_action},
         positive: {:quick_buy, @limit_buy_action},
-        negative: {:quick_sell, @limit_sell_action}
+        negative: {:quick_sell, [@cancel_order_action, @limit_sell_action]}
       },
       sell:
       %{
@@ -132,7 +132,7 @@ defmodule CfBot.Transitions do
         up_trend: {:buy, @market_buy_action},
         down_trend: {:sell, @market_sell_action},
         positive: {:quick_buy, @limit_buy_action},
-        negative: {:quick_sell, @limit_sell_action}
+        negative: {:quick_sell, [@cancel_order_action, @limit_sell_action]}
       },
       sell:
       %{
