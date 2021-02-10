@@ -63,7 +63,7 @@ defmodule CfLuno.Mediate do
   end
 
   def stop_order(nil) do
-  {:ok, [nil, false]}
+    {:ok, [nil, false]}
   end
   def stop_order(order_id) do
     Logger.debug("Cancel limit order #{order_id}")
@@ -87,7 +87,9 @@ defmodule CfLuno.Mediate do
     end
   end
 
-  def sum_trades(_product_id, _since, _, true), do: %{"ASK" => 0, "BID" => 0}
+  def sum_trades(_product_id, _since, _, total_profit, true) do
+    %{"ASK" => 0, "BID" => 0}
+  end
   def sum_trades(pair, since, _order_id, false) do
     {:ok, %{"trades" => trades}} = JsonUtils.retry_req(&CfLuno.Api.list_trades/1, [[pair: pair, since: since]])
     get_traded_volume(trades)
@@ -99,24 +101,28 @@ defmodule CfLuno.Mediate do
 
   defp get_traded_volume(nil), do: %{"ASK" => 0, "BID" => 0}
   defp get_traded_volume(trades) do
-    [ask, bid, last_price] = Enum.reduce(
+    [ask, bid, profit] = Enum.reduce(
       trades,
       [0, 0, 0],
       fn
-        (%{"type" => "ASK", "volume" => volume, "price" => price}, [vol_ask, vol_bid, _last_price]) ->
-          [vol_ask + to_float(volume), vol_bid, price]
-        (%{"type" => "BID", "volume" => volume, "price" => price}, [vol_ask, vol_bid, _last_price]) ->
-          [vol_ask, vol_bid + to_float(volume), price]
+        (%{"type" => "ASK", "volume" => volume, "price" => price}, [vol_ask, vol_bid, profit]) ->
+          vol_f = to_float(volume)
+          price_f = to_float(price)
+          [vol_ask + vol_f, vol_bid, profit + price_f * vol_f]
+        (%{"type" => "BID", "volume" => volume, "price" => price}, [vol_ask, vol_bid, profit]) ->
+          vol_f = to_float(volume)
+          price_f = to_float(price)
+          [vol_ask, vol_bid + vol_f, profit - price_f * vol_f]
       end
     )
     latest_ts = trades
                 |> List.last()
                 |> Map.get("timestamp")
-    vol = %{"ASK" => ask, "BID" => bid, "latest_ts" => latest_ts + 2, "last_order_price" => last_price}
+    vol = %{"ASK" => ask, "BID" => bid, "latest_ts" => latest_ts + 2}
     cond do
       ask > 0 and bid > 0 -> Logger.warn("Traded vol: #{inspect vol}")
-      ask > 0 -> Logger.warn("Sold #{ask} at lowest #{last_price}")
-      bid > 0 -> Logger.warn("Bought #{bid} at highest #{last_price}")
+      ask > 0 -> Logger.warn("Sold #{ask} at average #{profit / ask}")
+      bid > 0 -> Logger.warn("Bought #{bid} at average #{-profit / bid}")
       true -> :ok
     end
     vol
