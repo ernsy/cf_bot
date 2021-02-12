@@ -36,7 +36,7 @@ defmodule CfLuno.Mediate do
     params = [pair: pair, type: type, volume: vol_str, price: price_str, post_only: post_only]
     case JsonUtils.retry_req(&CfLuno.Api.post_order/1, [params]) do
       {:ok, %{"order_id" => new_order_id}} ->
-        Logger.debug("Placed limit #{type} with id #{new_order_id} for #{vol_str} at #{price_str}")
+        Logger.debug("Limit #{type} #{vol_str} @ #{price_str}")
         new_order_id
       _ -> nil
     end
@@ -51,13 +51,13 @@ defmodule CfLuno.Mediate do
                        |> Float.parse()
       counter_vol = ask_price * volume
                     |> :erlang.float_to_binary([{:decimals, 6}])
-      Logger.info("Place market #{type} for #{vol_str} at #{ask_price}")
+      Logger.warn("Market #{type} #{vol_str} @ #{ask_price}")
       JsonUtils.retry_req(&CfLuno.Api.market_order/1, [params0 ++ [counter_volume: counter_vol]])
     else
       result = JsonUtils.retry_req(&CfLuno.Api.market_order/1, [params0 ++ [base_volume: vol_str]])
       {bid_price, _} = get_ticker(pair)["bid"]
                        |> Float.parse()
-      Logger.info("Place market #{type} for #{vol_str} at #{bid_price}")
+      Logger.warn("Market #{type} #{vol_str} @ #{bid_price}")
       result
     end
   end
@@ -87,7 +87,7 @@ defmodule CfLuno.Mediate do
     end
   end
 
-  def sum_trades(_product_id, _since, _, total_profit, true) do
+  def sum_trades(_product_id, _since, _order_id, true) do
     %{"ASK" => 0, "BID" => 0}
   end
   def sum_trades(pair, since, _order_id, false) do
@@ -120,9 +120,11 @@ defmodule CfLuno.Mediate do
                 |> Map.get("timestamp")
     vol = %{"ASK" => ask, "BID" => bid, "latest_ts" => latest_ts + 2}
     cond do
-      ask > 0 and bid > 0 -> Logger.warn("Traded vol: #{inspect vol}")
-      ask > 0 -> Logger.warn("Sold #{ask} at average #{profit / ask}")
-      bid > 0 -> Logger.warn("Bought #{bid} at average #{-profit / bid}")
+      ask > 0 and bid > 0 -> Logger.info("Traded vol: #{inspect vol}")
+      ask > 0.05 -> Logger.error("Sold #{ask} @ #{round(profit / ask)}")
+      ask > 0 -> Logger.info("Sold #{ask} @ #{round(profit / ask)}")
+      bid > 0.05 -> Logger.error("Bought #{bid} @ #{round(-profit / bid)}")
+      bid > 0 -> Logger.info("Bought #{bid} @ #{round(-profit / bid)}")
       true -> :ok
     end
     vol

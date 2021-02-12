@@ -22,7 +22,8 @@ use Mix.Config
 #
 # tell logger to load a LoggerFileBackend processes
 config :logger,
-       backends: [{LoggerFileBackend, :error_log}, :console]
+       #backends: [{LoggerFileBackend, :error_log}, :console]
+       backends: [:console]
 
 # configuration for the {LoggerFileBackend, :error_log} backend
 config :logger,
