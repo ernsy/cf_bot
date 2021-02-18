@@ -76,6 +76,7 @@ defmodule CfLuno.Mediate do
   def list_open_orders(pair) do
     case JsonUtils.retry_req(&CfLuno.Api.list_orders/1, [[pair: pair, state: "PENDING"]]) do
       {:ok, %{"orders" => orders}} ->
+        Logger.debug("Orders #{inspect orders}")
         orders && Enum.map(
           orders,
           fn (%{"order_id" => id, "limit_price" => price, "creation_timestamp" => ts}) ->
@@ -88,7 +89,7 @@ defmodule CfLuno.Mediate do
   end
 
   def sum_trades(_product_id, _since, _order_id, true) do
-    %{"ASK" => 0, "BID" => 0}
+    nil
   end
   def sum_trades(pair, since, _order_id, false) do
     {:ok, %{"trades" => trades}} = JsonUtils.retry_req(&CfLuno.Api.list_trades/1, [[pair: pair, since: since]])
@@ -99,32 +100,33 @@ defmodule CfLuno.Mediate do
   # helper functions
   #---------------------------------------------------------------------------------------------------------------------
 
-  defp get_traded_volume(nil), do: %{"ASK" => 0, "BID" => 0}
+  defp get_traded_volume(nil), do: nil
   defp get_traded_volume(trades) do
-    [ask, bid, profit] = Enum.reduce(
+    [ask, bid, total_sec] = Enum.reduce(
       trades,
       [0, 0, 0],
       fn
-        (%{"type" => "ASK", "volume" => volume, "price" => price}, [vol_ask, vol_bid, profit]) ->
+        (%{"type" => "ASK", "volume" => volume, "price" => price}, [vol_ask, vol_bid, total_sec]) ->
           vol_f = to_float(volume)
           price_f = to_float(price)
-          [vol_ask + vol_f, vol_bid, profit + price_f * vol_f]
-        (%{"type" => "BID", "volume" => volume, "price" => price}, [vol_ask, vol_bid, profit]) ->
+          [vol_ask + vol_f, vol_bid, total_sec + price_f * vol_f]
+        (%{"type" => "BID", "volume" => volume, "price" => price}, [vol_ask, vol_bid, total_sec]) ->
           vol_f = to_float(volume)
           price_f = to_float(price)
-          [vol_ask, vol_bid + vol_f, profit - price_f * vol_f]
+          [vol_ask, vol_bid + vol_f, total_sec - price_f * vol_f]
       end
     )
     latest_ts = trades
                 |> List.last()
                 |> Map.get("timestamp")
-    vol = %{"ASK" => ask, "BID" => bid, "latest_ts" => latest_ts + 2}
+    avg = if ask > 0 or bid > 0, do: round(total_sec / (ask - bid)), else: 0
+    vol = %{"ASK" => ask, "BID" => bid, "latest_ts" => latest_ts + 2, "avg" => avg}
     cond do
-      ask > 0 and bid > 0 -> Logger.info("Traded vol: #{inspect vol}")
-      ask > 0.05 -> Logger.error("Sold #{ask} @ #{round(profit / ask)}")
-      ask > 0 -> Logger.info("Sold #{ask} @ #{round(profit / ask)}")
-      bid > 0.05 -> Logger.error("Bought #{bid} @ #{round(-profit / bid)}")
-      bid > 0 -> Logger.info("Bought #{bid} @ #{round(-profit / bid)}")
+      ask > 0 and bid > 0 -> Logger.warn("Traded vol: #{inspect vol}")
+      ask > 0.05 -> Logger.error("Sold #{ask} @ #{avg}")
+      ask > 0 -> Logger.info("Sold #{ask} @ #{avg}")
+      bid > 0.05 -> Logger.error("Bought #{bid} @ #{avg}")
+      bid > 0 -> Logger.info("Bought #{bid} @ #{avg}")
       true -> :ok
     end
     vol
