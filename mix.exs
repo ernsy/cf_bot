@@ -15,7 +15,10 @@ defmodule CfBot.MixProject do
   def application do
     [
       extra_applications: [:logger],
-      mod: {CfBot.Application, []}
+      mod: {CfBot.Application, []},
+      env: [
+        example: "value"
+      ]
     ]
   end
 

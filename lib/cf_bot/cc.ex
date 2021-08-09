@@ -1,11 +1,6 @@
 defmodule CfBot.CC do
 
   def start_luno_bot() do
-    fee = 0.08 / 100
-    {price, _} = CfLuno.Mediate.get_ticker("XBTZAR")["last_trade"] |> Float.parse()
-    buy_amt = (CfLuno.Mediate.get_avail_bal("ZAR") - 500) / price
-    fee_allowance =  (CfLuno.Mediate.get_avail_bal("XBT") + buy_amt) * fee * 100
-    sell_amt = CfLuno.Mediate.get_avail_bal("XBT") - fee_allowance
     DynamicSupervisor.start_child(
       CfBot.DynSup,
       {
@@ -18,10 +13,10 @@ defmodule CfBot.CC do
           min_incr: 1,
           dt_pct: 0.4 / 100,
           ut_pct: 0.4 / 100,
-          bv_pct: 0.5,
-          stable_pct: 0.01 / 100,
-          sell_amt: sell_amt,
-          buy_amt: buy_amt,
+          bv_pct: 0.05,
+          stable_pct: 0.015 / 100,
+          j_pct: 0.03 / 100,
+          aj_pct: 0.015 / 100,
           prim_hodl_amt: 0,
           sec_hodl_amt: 0,
           mode: "bot",
